@@ -1,0 +1,9 @@
+(ocamllex lexer)
+
+(menhir
+ (modules parser))
+
+(library
+ (name src)
+ (wrapped false)
+ (modules ast_mon ast info ir lexer parser pass type utilities x86))
