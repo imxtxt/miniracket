@@ -6,15 +6,16 @@ let parse filename =
   ast
 
 let _ =
-  let open Pass in
-  parse Sys.argv.(1)
-  |> TypeCheck.run 
-  |> Uniquify.run 
-  |> RemoveComplexOperands.run
-  |> ExplicateControl.run
-  |> LocalsTypes.run
-  |> SelectInstructions.run 
-  |> AssignHomes.run
-  |> PatchInstructions.run
-  |> PreludeConclusion.run
+  parse Sys.argv.(1) 
+  |> Type_check.run 
+  |> Uniquify.run
+  |> Remove_complex_operands.run
+  |> Explicate_control.run
+  |> Inject_info.run
+  |> Select_instructions.run
+  |> Uncover_live.run
+  |> Interference_graph.run
+  |> Allocate_registers.run
+  |> Patch_instructions.run
+  |> Prelude_conclusion.run
   |> X86.PP.std_pp

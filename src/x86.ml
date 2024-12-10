@@ -66,22 +66,33 @@ module PP = struct
     | Retq -> Format.fprintf formatter "retq"
     | Jmp label -> Format.fprintf formatter "jmp %s" (mangle_label label)
 
-  let pp_instrs formatter instrs =
-    Format.pp_print_list
-      ~pp_sep:(fun formatter () -> Format.fprintf formatter "@,")
-      pp_instr formatter instrs
+  let pp_instrs formatter { instrs; liveafters } =
+    match liveafters with
+    | [] ->
+        Format.pp_print_list
+          ~pp_sep:(fun formatter () -> Format.fprintf formatter "@,")
+          pp_instr formatter instrs
+    | _ ->
+        let live_instrs = List.combine instrs liveafters in
+        Format.pp_print_list
+          ~pp_sep:(fun formatter () -> Format.fprintf formatter "@,")
+          (fun formatter (instr, liveafter) ->
+            pp_instr formatter instr;
+            Format.fprintf formatter "@,#";
+            pp_sets formatter liveafter)
+          formatter live_instrs
 
   let pp_block formatter (label, blk) =
     Format.fprintf formatter "@[<v 2>%s:@,%a@]" (mangle_label label) pp_instrs
-      blk.instrs
+      blk
 
-  let pp_def formatter { name; blocks; info = _ } =
+  let pp_def formatter { name; blocks; info } =
     let pp_blocks formatter blocks =
       Format.pp_print_list
         ~pp_sep:(fun formatter () -> Format.fprintf formatter "@,")
         pp_block formatter blocks
     in
-
+    Info.PP.pp formatter info;
     if name = "main" then
       Format.fprintf formatter "@[<v>.global %s@,%s:@,%a@]" (mangle_label name)
         (mangle_label name) pp_blocks blocks
@@ -110,4 +121,24 @@ module RegUse = struct
   let allocatable_regs = caller_saved_regs @ callee_saved_regs
   let allocatable_regs_len = List.length allocatable_regs
   let all_regs = allocatable_regs @ unused_regs
+
+  let reg2num =
+    let allocatable_regs_assoc =
+      List.mapi (fun i r -> (r, i)) allocatable_regs
+    in
+    let unused_regs_assoc =
+      List.(mapi (fun i r -> (r, i - length unused_regs)) unused_regs)
+    in
+    let assoc = allocatable_regs_assoc @ unused_regs_assoc in
+    fun reg -> List.assoc reg assoc
+
+  let num2reg =
+    let allocatable_regs_assoc =
+      List.mapi (fun i r -> (i, r)) allocatable_regs
+    in
+    let unused_regs_assoc =
+      List.(mapi (fun i r -> (i - length unused_regs, r)) unused_regs)
+    in
+    let assoc = allocatable_regs_assoc @ unused_regs_assoc in
+    fun num -> List.assoc num assoc
 end

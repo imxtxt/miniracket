@@ -66,12 +66,13 @@ module PP = struct
           ~pp_sep:(fun formatter () -> Format.fprintf formatter " ")
           pp_param formatter params
 
-  let pp_def formatter { name; params; retty; blocks; info = _ } =
+  let pp_def formatter { name; params; retty; blocks; info } =
     let pp_blocks formatter blocks =
       Format.pp_print_list
         ~pp_sep:(fun formatter () -> Format.fprintf formatter "@,")
         pp_block formatter blocks
     in
+    Info.PP.pp formatter info;
     Format.fprintf formatter "@[<v>define (%s%a) : %a {@,%a@,}@]" name pp_params
       params Type.pp retty pp_blocks blocks
 
@@ -106,4 +107,19 @@ module DefinedVar = struct
     List.fold_left
       (fun acc (param, _) -> SetS.add param acc)
       defined_vars params
+end
+
+module CFG = struct
+  open Utilities
+
+  let rec succs conclusion_label (tail : tail) =
+    match tail with
+    | Return _ -> SetS.singleton conclusion_label
+    | Seq (_, tail) -> succs conclusion_label tail
+
+  let make_cfg { blocks; info; _ } =
+    List.fold_left
+      (fun acc (lbl, tail) ->
+        MapS.add lbl (succs info.conclusion_label tail) acc)
+      MapS.empty blocks
 end
