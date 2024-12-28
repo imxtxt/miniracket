@@ -10,26 +10,34 @@ let arg_loc (arg : arg) =
   | Reg reg -> SetS.singleton reg
   | Var var -> SetS.singleton var
   | Deref _ -> raise LivenessError
+  | ByteReg breg ->
+      let reg = RegUse.bytereg2reg breg in
+      SetS.singleton reg
 
 let instr_read (instr : instr) =
   match instr with
-  | Instr2 ((Addq | Subq), arg1, arg2) ->
+  | Instr2 ((Addq | Subq | Xorq | Cmpq), arg1, arg2) ->
       SetS.union (arg_loc arg1) (arg_loc arg2)
-  | Instr2 (Movq, arg1, _) -> arg_loc arg1
+  | Instr2 ((Movq | Movzbq), arg1, _) -> arg_loc arg1
   | Instr1 ((Pushq | Popq), _) -> raise LivenessError
   | Callq (_, arity) ->
       let open Base in
       SetS.of_list (List.take RegUse.arg_regs arity)
   | Retq -> raise LivenessError
   | Jmp _ -> SetS.empty
+  | JmpIf _ -> SetS.empty
+  | Set _ -> SetS.empty
 
 let instr_write (instr : instr) =
   match instr with
-  | Instr2 ((Addq | Subq | Movq), _, arg2) -> arg_loc arg2
+  | Instr2 ((Addq | Subq | Movq | Xorq | Movzbq), _, arg2) -> arg_loc arg2
+  | Instr2 (Cmpq, _, _) -> SetS.empty
   | Instr1 ((Pushq | Popq), _) -> raise LivenessError
   | Callq _ -> SetS.of_list RegUse.caller_saved_regs
   | Retq -> raise LivenessError
   | Jmp _ -> SetS.empty
+  | JmpIf _ -> SetS.empty
+  | Set (_, arg) -> arg_loc arg
 
 let liveness_instrs (liveafter : SetS.t) (instrs : X86.instr list) =
   List.fold_right

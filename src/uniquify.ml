@@ -15,6 +15,10 @@ let rec uni_exp env { Ast.exp; ty } =
         let new_env = MapS.add var new_var env in
         let new_body = uni_exp new_env body in
         Let (new_var, new_init, new_body)
+    | Bool b -> Bool b
+    | If (e1, e2, e3) -> If (uni_exp env e1, uni_exp env e2, uni_exp env e3)
+    | Cmp (cc, e1, e2) -> Cmp (cc, uni_exp env e1, uni_exp env e2)
+    | Not e1 -> Not (uni_exp env e1)
   in
   { exp = new_exp; ty }
 

@@ -18,6 +18,17 @@ rule token = parse
   | '-'                         { SUB                     }
   | "let"                       { LET                     }
   | "read"                      { READ                    }
+  | "#t"                        { TRUE                    }
+  | "#f"                        { FALSE                   }
+  | "if"                        { IF                      }
+  | "eq?"                       { EQ                      }
+  | "<"                         { LT                      }
+  | "<="                        { LE                      }
+  | ">"                         { GT                      }
+  | ">="                        { GE                      }
+  | "and"                       { AND                     }
+  | "or"                        { OR                      }
+  | "not"                       { NOT                     }
   | lower ident_suffix* as lxm  { VARIABLE lxm            }
   | digit+ as lxm               { INT (int_of_string lxm) }
   | eof                         { EOF                     }

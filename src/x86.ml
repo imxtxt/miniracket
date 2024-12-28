@@ -5,11 +5,23 @@ type arg =
   | Reg of string
   | Var of string
   | Deref of int * string
+  | ByteReg of string
+
+type cc =
+  | E
+  | Ne
+  | L
+  | Le
+  | G
+  | Ge
 
 type op2 =
   | Addq
   | Subq
   | Movq
+  | Xorq
+  | Cmpq
+  | Movzbq
 
 type op1 =
   | Pushq
@@ -21,6 +33,8 @@ type instr =
   | Callq of label * int
   | Retq
   | Jmp of label
+  | JmpIf of cc * label
+  | Set of cc * arg
 
 type block = {
   instrs : instr list;
@@ -42,12 +56,25 @@ module PP = struct
     | Reg reg -> Format.fprintf formatter "%%%s" reg
     | Var var -> Format.fprintf formatter "%s" var
     | Deref (idx, reg) -> Format.fprintf formatter "%d(%%%s)" idx reg
+    | ByteReg reg -> Format.fprintf formatter "%%%s" reg
+
+  let pp_cc formatter cc =
+    match cc with
+    | E -> Format.fprintf formatter "e"
+    | Ne -> Format.fprintf formatter "ne"
+    | L -> Format.fprintf formatter "l"
+    | Le -> Format.fprintf formatter "le"
+    | G -> Format.fprintf formatter "g"
+    | Ge -> Format.fprintf formatter "ge"
 
   let pp_opcode2 formatter op2 =
     match op2 with
     | Addq -> Format.fprintf formatter "addq"
     | Subq -> Format.fprintf formatter "subq"
     | Movq -> Format.fprintf formatter "movq"
+    | Xorq -> Format.fprintf formatter "xorq"
+    | Cmpq -> Format.fprintf formatter "cmpq"
+    | Movzbq -> Format.fprintf formatter "movzbq"
 
   let pp_opcode1 formatter op1 =
     match op1 with
@@ -65,6 +92,9 @@ module PP = struct
         Format.fprintf formatter "callq %s" (mangle_label label)
     | Retq -> Format.fprintf formatter "retq"
     | Jmp label -> Format.fprintf formatter "jmp %s" (mangle_label label)
+    | JmpIf (cc, label) ->
+        Format.fprintf formatter "j%a %s" pp_cc cc (mangle_label label)
+    | Set (cc, arg) -> Format.fprintf formatter "set%a %a" pp_cc cc pp_arg arg
 
   let pp_instrs formatter { instrs; liveafters } =
     match liveafters with
@@ -141,4 +171,16 @@ module RegUse = struct
     in
     let assoc = allocatable_regs_assoc @ unused_regs_assoc in
     fun num -> List.assoc num assoc
+
+  let bytereg2reg (br : string) =
+    match br with
+    | "ah" -> "rax"
+    | "al" -> "rax"
+    | "bh" -> "rbx"
+    | "bl" -> "rbx"
+    | "ch" -> "rcx"
+    | "cl" -> "rcx"
+    | "dh" -> "rdx"
+    | "dl" -> "rdx"
+    | _ -> failwith "bytereg2reg"
 end

@@ -1,10 +1,12 @@
 type ty =
   | Integer
+  | Boolean
   | Function of ty list * ty
 
 let rec pp formatter ty =
   match ty with
   | Integer -> Format.fprintf formatter "Integer"
+  | Boolean -> Format.fprintf formatter "Boolean"
   | Function (ts, t) ->
       let pp_ts formatter ts =
         Format.pp_print_list
@@ -16,4 +18,5 @@ let rec pp formatter ty =
 let ( = ) t1 t2 =
   match (t1, t2) with
   | Integer, Integer -> true
+  | Boolean, Boolean -> true
   | _ -> false

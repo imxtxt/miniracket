@@ -3,6 +3,14 @@ type label = string
 type atom =
   | Int of int
   | Var of string
+  | Bool of bool
+
+type cc =
+  | Eq
+  | Lt
+  | Le
+  | Gt
+  | Ge
 
 type exp =
   | Int of int
@@ -10,12 +18,17 @@ type exp =
   | Add of atom * atom
   | Sub of atom * atom
   | Var of string
+  | Bool of bool
+  | Cmp of cc * atom * atom
+  | Not of atom
 
 type stmt = Assign of string * exp
 
 type tail =
   | Return of exp
   | Seq of stmt * tail
+  | Goto of label
+  | IfStmt of cc * atom * atom * label * label
 
 type def = {
   name : label;
@@ -30,6 +43,16 @@ module PP = struct
     match atom with
     | Int num -> Format.fprintf formatter "%d" num
     | Var var -> Format.fprintf formatter "%s" var
+    | Bool true -> Format.fprintf formatter "#t"
+    | Bool false -> Format.fprintf formatter "#f"
+
+  let pp_cc formatter cc =
+    match cc with
+    | Eq -> Format.fprintf formatter "eq?"
+    | Lt -> Format.fprintf formatter "<"
+    | Le -> Format.fprintf formatter "<="
+    | Gt -> Format.fprintf formatter ">"
+    | Ge -> Format.fprintf formatter ">="
 
   let pp_exp formatter (exp : exp) =
     match exp with
@@ -40,6 +63,12 @@ module PP = struct
     | Sub (atom1, atom2) ->
         Format.fprintf formatter "(- %a %a)" pp_atom atom1 pp_atom atom2
     | Var var -> Format.fprintf formatter "%s" var
+    | Bool true -> Format.fprintf formatter "#t"
+    | Bool false -> Format.fprintf formatter "#f"
+    | Cmp (cc, atom1, atom2) ->
+        Format.fprintf formatter "(%a %a %a)" pp_cc cc pp_atom atom1 pp_atom
+          atom2
+    | Not atom1 -> Format.fprintf formatter "(not %a)" pp_atom atom1
 
   let pp_stmt formatter (stmt : stmt) =
     match stmt with
@@ -50,6 +79,10 @@ module PP = struct
     | Return exp -> Format.fprintf formatter "return %a" pp_exp exp
     | Seq (stmt, tail) ->
         Format.fprintf formatter "%a@,%a" pp_stmt stmt pp_tail tail
+    | Goto label -> Format.fprintf formatter "goto %s" label
+    | IfStmt (cc, a1, a2, thn, els) ->
+        Format.fprintf formatter "if (%a %a %a) goto %s; else goto %s;" pp_cc cc
+          pp_atom a1 pp_atom a2 thn els
 
   let pp_block formatter (label, tail) =
     Format.fprintf formatter "@[<v 2>%s:@,%a@]" label pp_tail tail
@@ -97,6 +130,8 @@ module DefinedVar = struct
     | Return _ -> SetS.empty
     | Seq (stmt, tail) ->
         SetS.union (defined_vars_stmt stmt) (defined_vars_tail tail)
+    | Goto _ -> SetS.empty
+    | IfStmt _ -> SetS.empty
 
   let defined_vars_def { params; blocks; _ } =
     let defined_vars =
@@ -116,6 +151,8 @@ module CFG = struct
     match tail with
     | Return _ -> SetS.singleton conclusion_label
     | Seq (_, tail) -> succs conclusion_label tail
+    | Goto label -> SetS.singleton label
+    | IfStmt (_, _, _, thn_lbl, els_lbl) -> SetS.of_list [ thn_lbl; els_lbl ]
 
   let make_cfg { blocks; info; _ } =
     List.fold_left

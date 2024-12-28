@@ -8,6 +8,7 @@ module AssignHomes = struct
     | Reg reg -> Reg reg
     | Var var -> MapS.find var env
     | Deref (idx, reg) -> Deref (idx, reg)
+    | ByteReg reg -> ByteReg reg
 
   let assign_home_instr env instr =
     match instr with
@@ -21,6 +22,10 @@ module AssignHomes = struct
     | Callq (lbl, arity) -> Callq (lbl, arity)
     | Retq -> Retq
     | Jmp lbl -> Jmp lbl
+    | JmpIf (cc, lbl) -> JmpIf (cc, lbl)
+    | Set (cc, arg1) ->
+        let arg1 = assign_home_arg env arg1 in
+        Set (cc, arg1)
 
   let assign_home_block env { instrs; liveafters = _ } =
     let instrs = List.map (assign_home_instr env) instrs in

@@ -2,6 +2,14 @@ open X86
 
 let patch_instr instr =
   match instr with
+  | Instr2 (Cmpq, arg, Imm imm) ->
+      let instr1 = Instr2 (Movq, Imm imm, Reg RegUse.patch_reg) in
+      let instr2 = Instr2 (Cmpq, arg, Reg RegUse.patch_reg) in
+      [ instr1; instr2 ]
+  | Instr2 (Movzbq, arg, Deref (i, r)) ->
+      let instr1 = Instr2 (Movzbq, arg, Reg RegUse.patch_reg) in
+      let instr2 = Instr2 (Movq, Reg RegUse.patch_reg, Deref (i, r)) in
+      [ instr1; instr2 ]
   | Instr2 (Movq, Reg r1, Reg r2) when r1 = r2 -> []
   | Instr2 (Movq, Deref (i1, r1), Deref (i2, r2)) when i1 = i2 && r1 = r2 -> []
   | Instr2 (op2, Deref (i1, r1), Deref (i2, r2)) ->
@@ -17,6 +25,8 @@ let patch_instr instr =
   | Callq (lbl, arity) -> [ Callq (lbl, arity) ]
   | Retq -> [ Retq ]
   | Jmp lbl -> [ Jmp lbl ]
+  | JmpIf (cc, lbl) -> [ JmpIf (cc, lbl) ]
+  | Set (cc, arg) -> [ Set (cc, arg) ]
 
 let patch_block { instrs; liveafters } =
   let instrs = List.map patch_instr instrs |> List.flatten in

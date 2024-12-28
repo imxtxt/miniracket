@@ -1,11 +1,19 @@
 type atom =
   | Int of int
   | Var of string
+  | Bool of bool
 
 type texp = {
   exp : exp;
   ty : Type.ty;
 }
+
+and cc =
+  | Eq
+  | Lt
+  | Le
+  | Gt
+  | Ge
 
 and exp =
   | Int of int
@@ -14,6 +22,10 @@ and exp =
   | Sub of atom * atom
   | Var of string
   | Let of string * texp * texp
+  | Bool of bool
+  | If of texp * texp * texp
+  | Cmp of cc * atom * atom
+  | Not of atom
 
 type def = {
   name : string;
@@ -27,6 +39,16 @@ module PP = struct
     match atom with
     | Int num -> Format.fprintf formatter "%d" num
     | Var var -> Format.fprintf formatter "%s" var
+    | Bool true -> Format.fprintf formatter "#t"
+    | Bool false -> Format.fprintf formatter "#f"
+
+  let pp_cc formatter cc =
+    match cc with
+    | Eq -> Format.fprintf formatter "eq?"
+    | Lt -> Format.fprintf formatter "<"
+    | Le -> Format.fprintf formatter "<="
+    | Gt -> Format.fprintf formatter ">"
+    | Ge -> Format.fprintf formatter ">="
 
   let rec pp_texp formatter { exp; ty = _ } =
     match exp with
@@ -40,6 +62,15 @@ module PP = struct
     | Let (var, init, body) ->
         Format.fprintf formatter "@[<2>(let@ ([%s@ %a])@ %a)@]" var pp_texp init
           pp_texp body
+    | Bool true -> Format.fprintf formatter "#t"
+    | Bool false -> Format.fprintf formatter "#f"
+    | If (cnd, thn, els) ->
+        Format.fprintf formatter "@[<2>(if@ %a@ %a@ %a)@]" pp_texp cnd pp_texp
+          thn pp_texp els
+    | Cmp (cc, a1, a2) ->
+        Format.fprintf formatter "@[<2>(%a@ %a@ %a)@]" pp_cc cc pp_atom a1
+          pp_atom a2
+    | Not a1 -> Format.fprintf formatter "@[<2>(not@ %a)@]" pp_atom a1
 
   let pp_param formatter (name, ty) =
     Format.fprintf formatter "[%s@ :@ %a]" name Type.pp ty
