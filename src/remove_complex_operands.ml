@@ -30,6 +30,7 @@ let rec rco_exp { A.exp; ty } =
       let new_exp = { M.exp = M.Sub (e1_atom, e2_atom); ty } in
       make_lets (e1_stmts @ e2_stmts) new_exp
   | A.Var var -> { M.exp = M.Var var; ty }
+  | A.GetBang var -> { M.exp = M.Var var; ty }
   | A.Let (var, init, body) ->
       let init = rco_exp init in
       let body = rco_exp body in
@@ -46,6 +47,14 @@ let rec rco_exp { A.exp; ty } =
       let e1_stmts, e1_atom = rco_atom e1 in
       let new_exp = { M.exp = M.Not e1_atom; ty } in
       make_lets e1_stmts new_exp
+  | A.SetBang (var, exp) -> { M.exp = SetBang (var, rco_exp exp); ty }
+  | A.Begin (exps, exp) ->
+      let exps = List.map rco_exp exps in
+      let exp = rco_exp exp in
+      { M.exp = Begin (exps, exp); ty }
+  | A.WhileLoop (cnd, body) ->
+      { M.exp = WhileLoop (rco_exp cnd, rco_exp body); ty }
+  | A.Void -> { M.exp = Void; ty }
 
 and rco_atom { A.exp; ty } =
   match exp with
@@ -67,6 +76,10 @@ and rco_atom { A.exp; ty } =
       let new_exp = { M.exp = M.Sub (e1_atom, e2_atom); ty } in
       (e1_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
   | A.Var var -> ([], M.Var var)
+  | A.GetBang var ->
+      let tmp = gensym () in
+      let new_exp = { M.exp = M.Var var; ty } in
+      ([ (tmp, new_exp) ], M.Var tmp)
   | A.Let (var, init, body) ->
       let init = rco_exp init in
       let body_stmts, body_atom = rco_atom body in
@@ -87,6 +100,21 @@ and rco_atom { A.exp; ty } =
       let tmp = gensym () in
       let new_exp = { M.exp = M.Not e1_atom; ty } in
       (e1_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | A.SetBang (var, exp) ->
+      let tmp = gensym () in
+      let new_exp = { M.exp = SetBang (var, rco_exp exp); ty } in
+      ([ (tmp, new_exp) ], M.Var tmp)
+  | A.Begin (exps, exp) ->
+      let tmp = gensym () in
+      let exps = List.map rco_exp exps in
+      let exp = rco_exp exp in
+      let new_exp = { M.exp = Begin (exps, exp); ty } in
+      ([ (tmp, new_exp) ], M.Var tmp)
+  | A.WhileLoop (cnd, body) ->
+      let tmp = gensym () in
+      let new_exp = { M.exp = WhileLoop (rco_exp cnd, rco_exp body); ty } in
+      ([ (tmp, new_exp) ], M.Var tmp)
+  | A.Void -> ([], M.Void)
 
 let rco_def { A.name; params; retty; body } =
   let body = rco_exp body in

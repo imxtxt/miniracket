@@ -29,6 +29,10 @@ rule token = parse
   | "and"                       { AND                     }
   | "or"                        { OR                      }
   | "not"                       { NOT                     }
+  | "set!"                      { SET                     }
+  | "begin"                     { BEGIN                   }
+  | "while"                     { WHILE                   }
+  | "void"                      { VOID                    }
   | lower ident_suffix* as lxm  { VARIABLE lxm            }
   | digit+ as lxm               { INT (int_of_string lxm) }
   | eof                         { EOF                     }

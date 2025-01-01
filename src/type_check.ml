@@ -23,6 +23,7 @@ let rec check_exp env { A.exp; _ } =
       | T.Integer, T.Integer -> { A.exp = A.Sub (e1, e2); ty = T.Integer }
       | _ -> raise TypeError)
   | Var var -> { A.exp = A.Var var; ty = MapS.find var env }
+  | GetBang _ -> assert false
   | Let (var, init, body) ->
       let init = check_exp env init in
       let env = MapS.add var init.ty env in
@@ -51,6 +52,21 @@ let rec check_exp env { A.exp; _ } =
       let e1 = check_exp env e1 in
       check_euqal e1.ty T.Boolean;
       { A.exp = A.Not e1; ty = T.Boolean }
+  | SetBang (var, exp) ->
+      let exp = check_exp env exp in
+      let var_ty = MapS.find var env in
+      check_euqal var_ty exp.ty;
+      { A.exp = SetBang (var, exp); ty = T.Void }
+  | Begin (exps, exp) ->
+      let exps = List.map (check_exp env) exps in
+      let exp = check_exp env exp in
+      { A.exp = Begin (exps, exp); ty = exp.ty }
+  | WhileLoop (cnd, body) ->
+      let cnd = check_exp env cnd in
+      let body = check_exp env body in
+      check_euqal T.Boolean cnd.ty;
+      { A.exp = WhileLoop (cnd, body); ty = T.Void }
+  | Void -> { A.exp = Void; ty = T.Void }
 
 let check_def env { A.name; params; retty; body } =
   let env =

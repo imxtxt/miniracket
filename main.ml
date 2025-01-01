@@ -6,9 +6,10 @@ let parse filename =
   ast
 
 let _ =
-  parse Sys.argv.(1) 
-  |> Type_check.run 
+  parse Sys.argv.(1)
+  |> Type_check.run
   |> Uniquify.run
+  |> Uncover_get.run
   |> Remove_complex_operands.run
   |> Explicate_control.run
   |> Inject_info.run

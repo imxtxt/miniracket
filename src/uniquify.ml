@@ -9,6 +9,7 @@ let rec uni_exp env { Ast.exp; ty } =
     | Add (e1, e2) -> Add (uni_exp env e1, uni_exp env e2)
     | Sub (e1, e2) -> Sub (uni_exp env e1, uni_exp env e2)
     | Var var -> Var (MapS.find var env)
+    | GetBang _ -> assert false
     | Let (var, init, body) ->
         let new_init = uni_exp env init in
         let new_var = gensym () in
@@ -19,6 +20,10 @@ let rec uni_exp env { Ast.exp; ty } =
     | If (e1, e2, e3) -> If (uni_exp env e1, uni_exp env e2, uni_exp env e3)
     | Cmp (cc, e1, e2) -> Cmp (cc, uni_exp env e1, uni_exp env e2)
     | Not e1 -> Not (uni_exp env e1)
+    | SetBang (var, exp) -> SetBang (MapS.find var env, uni_exp env exp)
+    | Begin (es, e) -> Begin (List.map (uni_exp env) es, uni_exp env e)
+    | WhileLoop (cnd, body) -> WhileLoop (uni_exp env cnd, uni_exp env body)
+    | Void -> Void
   in
   { exp = new_exp; ty }
 

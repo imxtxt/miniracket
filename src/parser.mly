@@ -1,6 +1,14 @@
 %{
   open Type
   open Ast
+
+  let rec mk_begin es =
+    match es with
+    | [] -> failwith "mk_begin"
+    | [a] -> [], a
+    | h :: t ->
+        let tmp, last = mk_begin t in
+        (h :: tmp), last
 %}
 
 // LVar
@@ -27,6 +35,12 @@
 %token AND "and"
 %token OR "or"
 %token NOT "not"
+
+// LWhile
+%token SET "set!"
+%token BEGIN "begin"
+%token WHILE "while"
+%token VOID "void"
 
 %token EOF
 
@@ -58,3 +72,9 @@ texp:
 | "(" "not" e1 = texp ")"                    { {Ast.exp = Not e1; ty = Integer}                                            }
 | "(" "and" e1 = texp e2 = texp ")"          { {Ast.exp = If (e1, e2, {Ast.exp = Bool false; ty = Integer}); ty = Integer} }
 | "(" "or" e1 = texp e2 = texp ")"           { {Ast.exp = If (e1, {Ast.exp = Bool true; ty = Integer}, e2); ty = Integer}  }
+
+// LWhile
+| "(" "set!" var = VARIABLE rhs = texp ")"  { {Ast.exp = SetBang (var, rhs); ty = Integer}                       }
+| "(" "begin" es = list(texp) ")"           { let es, e = mk_begin es in {Ast.exp = Begin (es, e); ty = Integer} }
+| "(" "while" cnd = texp body = texp ")"    { {Ast.exp = WhileLoop (cnd, body); ty = Integer}                    }
+| "(" "void" ")"                            { {Ast.exp = Void; ty = Integer}                                     }

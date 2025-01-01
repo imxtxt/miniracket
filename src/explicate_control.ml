@@ -21,6 +21,7 @@ let to_ir_atom (atom : A.atom) : I.atom =
   | Int num -> Int num
   | Var var -> Var var
   | Bool b -> Bool b
+  | Void -> Void
 
 let to_ir_cc (cc : A.cc) : I.cc =
   match cc with
@@ -49,6 +50,14 @@ let rec explicate_tail { A.exp; _ } =
   | A.Cmp (cc, a1, a2) ->
       I.Return (I.Cmp (to_ir_cc cc, to_ir_atom a1, to_ir_atom a2))
   | A.Not a1 -> I.Return (I.Not (to_ir_atom a1))
+  | A.SetBang (var, exp) ->
+      let cont = I.Return I.Void in
+      explicate_assign exp var cont
+  | A.Begin (exps, exp) ->
+      let cont = explicate_tail exp in
+      List.fold_right explicate_effect exps cont
+  | A.WhileLoop (cnd, body) -> explicate_while cnd body (I.Return Void)
+  | A.Void -> I.Return I.Void
 
 and explicate_assign { A.exp; _ } var cont =
   match exp with
@@ -73,6 +82,16 @@ and explicate_assign { A.exp; _ } var cont =
       I.Seq
         (I.Assign (var, I.Cmp (to_ir_cc cc, to_ir_atom a1, to_ir_atom a2)), cont)
   | A.Not a1 -> I.Seq (I.Assign (var, I.Not (to_ir_atom a1)), cont)
+  | A.SetBang (v, exp) ->
+      let cont = I.Seq (I.Assign (var, I.Void), cont) in
+      explicate_assign exp v cont
+  | A.Begin (exps, exp) ->
+      let cont = explicate_assign exp var cont in
+      List.fold_right explicate_effect exps cont
+  | A.WhileLoop (cnd, body) ->
+      let cont = I.Seq (I.Assign (var, I.Void), cont) in
+      explicate_while cnd body cont
+  | A.Void -> I.Seq (I.Assign (var, I.Void), cont)
 
 and explicate_pred { A.exp; _ } thn_cont els_cont =
   match exp with
@@ -108,6 +127,46 @@ and explicate_pred { A.exp; _ } thn_cont els_cont =
       I.IfStmt (I.Eq, I.Var var, I.Bool true, els_label, thn_label)
   | A.Not (A.Bool true) -> els_cont
   | A.Not (A.Bool false) -> thn_cont
+  | A.Not A.Void -> raise IrError
+  | A.SetBang _ -> raise IrError
+  | A.Begin (exps, exp) ->
+      let cont = explicate_pred exp thn_cont els_cont in
+      List.fold_right explicate_effect exps cont
+  | A.WhileLoop _ -> raise IrError
+  | A.Void -> raise IrError
+
+and explicate_effect { A.exp; _ } cont =
+  match exp with
+  | A.Int _ -> cont
+  | A.Read -> I.Seq (I.ReadStmt, cont)
+  | A.Add _ -> cont
+  | A.Sub _ -> cont
+  | A.Var _ -> cont
+  | A.Let (var, init, body) ->
+      Hashtbl.add locals_types var init.ty;
+      let cont = explicate_effect body cont in
+      explicate_assign init var cont
+  | A.Bool _ -> cont
+  | A.If (cnd, thn, els) ->
+      let join_label = create_block cont in
+      let thn_cont = explicate_effect thn (I.Goto join_label) in
+      let els_cont = explicate_effect els (I.Goto join_label) in
+      explicate_pred cnd thn_cont els_cont
+  | A.Cmp _ -> cont
+  | A.Not _ -> cont
+  | A.SetBang (var, exp) -> explicate_assign exp var cont
+  | A.Begin (exps, exp) ->
+      let cont = explicate_effect exp cont in
+      List.fold_right explicate_effect exps cont
+  | A.WhileLoop (cnd, body) -> explicate_while cnd body cont
+  | A.Void -> cont
+
+and explicate_while cnd body els_cont =
+  let start_label = genlabel () in
+  let body_cont = explicate_effect body (I.Goto start_label) in
+  let cnd_tail = explicate_pred cnd body_cont els_cont in
+  basic_blocks := (start_label, cnd_tail) :: !basic_blocks;
+  I.Goto start_label
 
 let explicate_def { A.name; params; retty; body } =
   basic_blocks := [];

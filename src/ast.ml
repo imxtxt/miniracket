@@ -16,11 +16,16 @@ and exp =
   | Add of texp * texp
   | Sub of texp * texp
   | Var of string
+  | GetBang of string
   | Let of string * texp * texp
   | Bool of bool
   | If of texp * texp * texp
   | Cmp of cc * texp * texp
   | Not of texp
+  | SetBang of string * texp
+  | Begin of texp list * texp
+  | WhileLoop of texp * texp
+  | Void
 
 type def = {
   name : string;
@@ -47,6 +52,7 @@ module PP = struct
     | Sub (e1, e2) ->
         Format.fprintf formatter "@[<2>(-@ %a@ %a)@]" pp_texp e1 pp_texp e2
     | Var var -> Format.fprintf formatter "%s" var
+    | GetBang var -> Format.fprintf formatter "@[(get!@ %s)@]" var
     | Let (var, init, body) ->
         Format.fprintf formatter "@[<2>(let@ ([%s@ %a])@ %a)@]" var pp_texp init
           pp_texp body
@@ -59,6 +65,20 @@ module PP = struct
         Format.fprintf formatter "@[<2>(%a@ %a@ %a)@]" pp_cc cc pp_texp e1
           pp_texp e2
     | Not e -> Format.fprintf formatter "@[<2>(not@ %a)@]" pp_texp e
+    | SetBang (var, rhs) ->
+        Format.fprintf formatter "@[<2>(set!@ %s@ %a)@]" var pp_texp rhs
+    | Begin (es, e) ->
+        Format.fprintf formatter "@[<v 2>(begin@ %a@ %a)@]" pp_texps es pp_texp
+          e
+    | WhileLoop (cnd, body) ->
+        Format.fprintf formatter "@[<v 2>(while@ %a@ %a)@]" pp_texp cnd pp_texp
+          body
+    | Void -> Format.fprintf formatter "@[(void)@]"
+
+  and pp_texps formatter exps =
+    Format.pp_print_list
+      ~pp_sep:(fun formatter () -> Format.fprintf formatter "@ ")
+      pp_texp formatter exps
 
   let pp_param formatter (name, ty) =
     Format.fprintf formatter "[%s@ :@ %a]" name Type.pp ty

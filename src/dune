@@ -25,6 +25,7 @@
   select_instructions
   type_check
   type
+  uncover_get
   uncover_live
   uniquify
   utilities

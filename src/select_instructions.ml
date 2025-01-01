@@ -15,6 +15,7 @@ let select_atom (atom : Ir.atom) : X86.arg =
   | Var var -> Var var
   | Bool true -> Imm 1
   | Bool false -> Imm 0
+  | Void -> Imm 0
 
 let select_assign dest (exp : Ir.exp) =
   match exp with
@@ -58,10 +59,16 @@ let select_assign dest (exp : Ir.exp) =
       let instr1 = Instr2 (Movq, arg1, dest) in
       let instr2 = Instr2 (Xorq, Imm 1, dest) in
       [ instr1; instr2 ]
+  | Void ->
+      let instr1 = Instr2 (Movq, Imm 0, dest) in
+      [ instr1 ]
 
 let select_stmt (stmt : Ir.stmt) =
   match stmt with
   | Assign (var, rhs) -> select_assign (Var var) rhs
+  | ReadStmt ->
+      let instr1 = Callq ("read_int", 0) in
+      [ instr1 ]
 
 let rec select_tail (info : Info.t) (tail : Ir.tail) =
   match tail with

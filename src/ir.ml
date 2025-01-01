@@ -4,6 +4,7 @@ type atom =
   | Int of int
   | Var of string
   | Bool of bool
+  | Void
 
 type cc =
   | Eq
@@ -21,8 +22,11 @@ type exp =
   | Bool of bool
   | Cmp of cc * atom * atom
   | Not of atom
+  | Void
 
-type stmt = Assign of string * exp
+type stmt =
+  | Assign of string * exp
+  | ReadStmt
 
 type tail =
   | Return of exp
@@ -45,6 +49,7 @@ module PP = struct
     | Var var -> Format.fprintf formatter "%s" var
     | Bool true -> Format.fprintf formatter "#t"
     | Bool false -> Format.fprintf formatter "#f"
+    | Void -> Format.fprintf formatter "(void)"
 
   let pp_cc formatter cc =
     match cc with
@@ -69,10 +74,12 @@ module PP = struct
         Format.fprintf formatter "(%a %a %a)" pp_cc cc pp_atom atom1 pp_atom
           atom2
     | Not atom1 -> Format.fprintf formatter "(not %a)" pp_atom atom1
+    | Void -> Format.fprintf formatter "(void)"
 
   let pp_stmt formatter (stmt : stmt) =
     match stmt with
     | Assign (var, exp) -> Format.fprintf formatter "%s = %a" var pp_exp exp
+    | ReadStmt -> Format.fprintf formatter "(read)"
 
   let rec pp_tail formatter (tail : tail) =
     match tail with
@@ -124,6 +131,7 @@ module DefinedVar = struct
   let defined_vars_stmt (stmt : stmt) =
     match stmt with
     | Assign (var, _) -> SetS.singleton var
+    | ReadStmt -> SetS.empty
 
   let rec defined_vars_tail (tail : tail) =
     match tail with

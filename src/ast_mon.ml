@@ -2,6 +2,7 @@ type atom =
   | Int of int
   | Var of string
   | Bool of bool
+  | Void
 
 type texp = {
   exp : exp;
@@ -26,6 +27,10 @@ and exp =
   | If of texp * texp * texp
   | Cmp of cc * atom * atom
   | Not of atom
+  | SetBang of string * texp
+  | Begin of texp list * texp
+  | WhileLoop of texp * texp
+  | Void
 
 type def = {
   name : string;
@@ -41,6 +46,7 @@ module PP = struct
     | Var var -> Format.fprintf formatter "%s" var
     | Bool true -> Format.fprintf formatter "#t"
     | Bool false -> Format.fprintf formatter "#f"
+    | Void -> Format.fprintf formatter "@[(void)@]"
 
   let pp_cc formatter cc =
     match cc with
@@ -71,6 +77,20 @@ module PP = struct
         Format.fprintf formatter "@[<2>(%a@ %a@ %a)@]" pp_cc cc pp_atom a1
           pp_atom a2
     | Not a1 -> Format.fprintf formatter "@[<2>(not@ %a)@]" pp_atom a1
+    | SetBang (var, rhs) ->
+        Format.fprintf formatter "@[<2>(set!@ %s@ %a)@]" var pp_texp rhs
+    | Begin (es, e) ->
+        Format.fprintf formatter "@[<v 2>(begin@ %a@ %a)@]" pp_texps es pp_texp
+          e
+    | WhileLoop (cnd, body) ->
+        Format.fprintf formatter "@[<v 2>(while@ %a@ %a)@]" pp_texp cnd pp_texp
+          body
+    | Void -> Format.fprintf formatter "@[(void)@]"
+
+  and pp_texps formatter exps =
+    Format.pp_print_list
+      ~pp_sep:(fun formatter () -> Format.fprintf formatter "@ ")
+      pp_texp formatter exps
 
   let pp_param formatter (name, ty) =
     Format.fprintf formatter "[%s@ :@ %a]" name Type.pp ty
