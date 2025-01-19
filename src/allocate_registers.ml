@@ -9,6 +9,7 @@ module AssignHomes = struct
     | Var var -> MapS.find var env
     | Deref (idx, reg) -> Deref (idx, reg)
     | ByteReg reg -> ByteReg reg
+    | Global label -> Global label
 
   let assign_home_instr env instr =
     match instr with
@@ -26,6 +27,8 @@ module AssignHomes = struct
     | Set (cc, arg1) ->
         let arg1 = assign_home_arg env arg1 in
         Set (cc, arg1)
+    | Load (offset, base, dest) -> Load (offset, base, dest)
+    | Store (src, offset, base) -> Store (src, offset, base)
 
   let assign_home_block env { instrs; liveafters = _ } =
     let instrs = List.map (assign_home_instr env) instrs in
@@ -99,24 +102,48 @@ let allocate_registers_def { X86.name; blocks; info } =
   in
   let gather_spilled_nums color =
     List.fold_left
-      (fun acc (_, num) ->
-        if num >= RegUse.allocatable_regs_len then SetI.add num acc else acc)
+      (fun acc (var, num) ->
+        let var_type = MapS.find var info.locals_types in
+        if num >= RegUse.allocatable_regs_len && not (Type.is_pointer var_type)
+        then SetI.add num acc
+        else acc)
+      SetI.empty color
+  in
+  let gather_root_spilled_nums color =
+    List.fold_left
+      (fun acc (var, num) ->
+        let var_type = MapS.find var info.locals_types in
+        if num >= RegUse.allocatable_regs_len && Type.is_pointer var_type then
+          SetI.add num acc
+        else acc)
       SetI.empty color
   in
   let used_callee = gather_used_callee color in
   let spilled_nums = gather_spilled_nums color in
+  let spilled_map =
+    SetI.elements spilled_nums |> List.mapi (fun idx num -> (num, idx))
+  in
+  let root_spilled_nums = gather_root_spilled_nums color in
+  let root_spilled_map =
+    SetI.elements root_spilled_nums |> List.mapi (fun idx num -> (num, idx))
+  in
   let stack_space =
     let stack_size = SetS.cardinal used_callee + SetI.cardinal spilled_nums in
     align_stack (stack_size * 8)
   in
+  let root_stack_space = SetI.cardinal root_spilled_nums * 8 in
   let new_color =
     List.fold_left
       (fun acc (var, num) ->
+        let var_type = MapS.find var info.locals_types in
         if num < RegUse.allocatable_regs_len then
           MapS.add var (Reg (RegUse.num2reg num)) acc
+        else if Type.is_pointer var_type then
+          let idx = List.assoc num root_spilled_map in
+          MapS.add var (Deref ((idx + 1) * -8, "r15")) acc
         else
-          let num = num - RegUse.allocatable_regs_len in
-          let offset = (-8 * SetS.cardinal used_callee) - (8 * (1 + num)) in
+          let idx = List.assoc num spilled_map in
+          let offset = (-8 * SetS.cardinal used_callee) - (8 * (1 + idx)) in
           MapS.add var (Deref (offset, "rbp")) acc)
       MapS.empty color
   in
@@ -125,7 +152,7 @@ let allocate_registers_def { X86.name; blocks; info } =
       (fun (lbl, blk) -> (lbl, AssignHomes.assign_home_block new_color blk))
       blocks
   in
-  let info = { info with stack_space; used_callee } in
+  let info = { info with stack_space; root_stack_space; used_callee } in
   { X86.name; blocks; info }
 
 let run defs = List.map allocate_registers_def defs

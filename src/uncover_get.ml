@@ -18,6 +18,13 @@ let rec collect_set { Ast.exp; ty = _ } =
   | Begin (exps, exp) -> collect_sets (exp :: exps)
   | WhileLoop (cnd, body) -> collect_sets [ cnd; body ]
   | Void -> SetS.empty
+  | Vector _ -> assert false
+  | VectorLength exp1 -> collect_set exp1
+  | VectorRef (exp1, _) -> collect_set exp1
+  | VectorSet (exp1, _, exp2) -> collect_sets [ exp1; exp2 ]
+  | Collect _ -> SetS.empty
+  | Allocate _ -> SetS.empty
+  | GlobalValue _ -> SetS.empty
 
 and collect_sets exps =
   List.fold_left
@@ -43,6 +50,13 @@ let uncover_get_exp set_vars exp =
       | Begin (exps, exp) -> Begin (List.map helper exps, helper exp)
       | WhileLoop (cnd, body) -> WhileLoop (helper cnd, helper body)
       | Void -> Void
+      | Vector _ -> assert false
+      | VectorLength e1 -> VectorLength (helper e1)
+      | VectorRef (e1, idx) -> VectorRef (helper e1, idx)
+      | VectorSet (e1, idx, e2) -> VectorSet (helper e1, idx, helper e2)
+      | Collect bytes -> Collect bytes
+      | Allocate (len, ty) -> Allocate (len, ty)
+      | GlobalValue label -> GlobalValue label
     in
     { Ast.exp; ty }
   in

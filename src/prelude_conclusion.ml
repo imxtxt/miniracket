@@ -13,19 +13,37 @@ let prelude_conclusion_def { name; blocks; info } =
       used_callee
     |> List.split
   in
+  let init_root_stack_instrs =
+    let rec helper idx =
+      if idx < info.root_stack_space then
+        Instr2 (Movq, Imm 0, Deref (idx, "r15")) :: helper (idx + 8)
+      else []
+    in
+    helper 0
+  in
   let prelude_instrs =
     [
       Instr1 (Pushq, Reg "rbp");
       Instr2 (Movq, Reg "rsp", Reg "rbp");
       Instr2 (Subq, Imm info.stack_space, Reg "rsp");
     ]
-    @ store_used_callee @ [ Jmp info.start_label ]
+    @ store_used_callee
+    @ [
+        Instr2 (Movq, Imm 65536, Reg "rdi");
+        Instr2 (Movq, Imm 65536, Reg "rsi");
+        Callq ("initialize", 2);
+        Instr2 (Movq, Global "rootstack_begin", Reg "r15");
+      ]
+    @ init_root_stack_instrs
+    @ [ Instr2 (Addq, Imm info.root_stack_space, Reg "r15") ]
+    @ [ Jmp info.start_label ]
   in
   let prelude_block =
     (info.prelude_label, { instrs = prelude_instrs; liveafters = [] })
   in
   let conclusion_instrs =
-    load_used_callee
+    [ Instr2 (Subq, Imm info.root_stack_space, Reg "r15") ]
+    @ load_used_callee
     @ [
         Instr2 (Addq, Imm info.stack_space, Reg "rsp");
         Instr1 (Popq, Reg "rbp");

@@ -58,6 +58,13 @@ let rec explicate_tail { A.exp; _ } =
       List.fold_right explicate_effect exps cont
   | A.WhileLoop (cnd, body) -> explicate_while cnd body (I.Return Void)
   | A.Void -> I.Return I.Void
+  | A.VectorLength a1 -> I.Return (I.VectorLength (to_ir_atom a1))
+  | A.VectorRef (a1, idx) -> I.Return (I.VectorRef (to_ir_atom a1, idx))
+  | A.VectorSet (a1, idx, a2) ->
+      I.Return (I.VectorSet (to_ir_atom a1, idx, to_ir_atom a2))
+  | A.Collect _ -> raise IrError
+  | A.Allocate _ -> raise IrError
+  | A.GlobalValue _ -> raise IrError
 
 and explicate_assign { A.exp; _ } var cont =
   match exp with
@@ -92,8 +99,18 @@ and explicate_assign { A.exp; _ } var cont =
       let cont = I.Seq (I.Assign (var, I.Void), cont) in
       explicate_while cnd body cont
   | A.Void -> I.Seq (I.Assign (var, I.Void), cont)
+  | A.VectorLength a1 ->
+      I.Seq (I.Assign (var, I.VectorLength (to_ir_atom a1)), cont)
+  | A.VectorRef (a1, idx) ->
+      I.Seq (I.Assign (var, I.VectorRef (to_ir_atom a1, idx)), cont)
+  | A.VectorSet (a1, idx, a2) ->
+      I.Seq
+        (I.Assign (var, I.VectorSet (to_ir_atom a1, idx, to_ir_atom a2)), cont)
+  | A.Collect _ -> raise IrError
+  | A.Allocate (len, ty) -> I.Seq (I.Assign (var, I.Allocate (len, ty)), cont)
+  | A.GlobalValue label -> I.Seq (I.Assign (var, I.GlobalValue label), cont)
 
-and explicate_pred { A.exp; _ } thn_cont els_cont =
+and explicate_pred { A.exp; ty } thn_cont els_cont =
   match exp with
   | A.Int _
   | A.Read
@@ -134,6 +151,16 @@ and explicate_pred { A.exp; _ } thn_cont els_cont =
       List.fold_right explicate_effect exps cont
   | A.WhileLoop _ -> raise IrError
   | A.Void -> raise IrError
+  | A.VectorLength _ -> raise IrError
+  | A.VectorRef (a1, idx) ->
+      let tmp = gensym () in
+      Hashtbl.add locals_types tmp ty;
+      let cont = explicate_pred { A.exp = A.Var tmp; ty } thn_cont els_cont in
+      explicate_assign { A.exp = A.VectorRef (a1, idx); ty } tmp cont
+  | A.VectorSet _ -> raise IrError
+  | A.Collect _ -> raise IrError
+  | A.Allocate _ -> raise IrError
+  | A.GlobalValue _ -> raise IrError
 
 and explicate_effect { A.exp; _ } cont =
   match exp with
@@ -160,6 +187,13 @@ and explicate_effect { A.exp; _ } cont =
       List.fold_right explicate_effect exps cont
   | A.WhileLoop (cnd, body) -> explicate_while cnd body cont
   | A.Void -> cont
+  | A.VectorLength _ -> cont
+  | A.VectorRef _ -> cont
+  | A.VectorSet (a1, idx, a2) ->
+      I.Seq (I.VectorSetStmt (to_ir_atom a1, idx, to_ir_atom a2), cont)
+  | A.Collect bytes -> I.Seq (I.Collect bytes, cont)
+  | A.Allocate _ -> raise IrError
+  | A.GlobalValue _ -> raise IrError
 
 and explicate_while cnd body els_cont =
   let start_label = genlabel () in
@@ -183,6 +217,7 @@ let explicate_def { A.name; params; retty; body } =
       start_label;
       conclusion_label = genlabel ();
       stack_space = 0;
+      root_stack_space = 0;
       cfg = MapS.empty;
       graph = Graph.graph_new ();
       used_callee = SetS.empty;

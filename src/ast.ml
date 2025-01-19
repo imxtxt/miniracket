@@ -26,6 +26,13 @@ and exp =
   | Begin of texp list * texp
   | WhileLoop of texp * texp
   | Void
+  | Vector of texp list
+  | VectorLength of texp
+  | VectorRef of texp * int
+  | VectorSet of texp * int * texp
+  | Collect of int
+  | Allocate of int * Type.ty
+  | GlobalValue of string
 
 type def = {
   name : string;
@@ -59,7 +66,7 @@ module PP = struct
     | Bool true -> Format.fprintf formatter "#t"
     | Bool false -> Format.fprintf formatter "#f"
     | If (cnd, thn, els) ->
-        Format.fprintf formatter "@[<2>(if@ %a@ %a@ %a)@]" pp_texp cnd pp_texp
+        Format.fprintf formatter "@[<4>(if@ %a@ %a@ %a)@]" pp_texp cnd pp_texp
           thn pp_texp els
     | Cmp (cc, e1, e2) ->
         Format.fprintf formatter "@[<2>(%a@ %a@ %a)@]" pp_cc cc pp_texp e1
@@ -74,6 +81,19 @@ module PP = struct
         Format.fprintf formatter "@[<v 2>(while@ %a@ %a)@]" pp_texp cnd pp_texp
           body
     | Void -> Format.fprintf formatter "@[(void)@]"
+    | Vector es -> Format.fprintf formatter "@[<2>(vector@ %a)@]" pp_texps es
+    | VectorLength e ->
+        Format.fprintf formatter "@[<2>(vector-length@ %a)@]" pp_texp e
+    | VectorRef (e1, idx) ->
+        Format.fprintf formatter "@[<2>(vector-ref@ %a@ %d)@]" pp_texp e1 idx
+    | VectorSet (e1, idx, e2) ->
+        Format.fprintf formatter "@[<2>(vector-set!@ %a@ %d@ %a)@]" pp_texp e1
+          idx pp_texp e2
+    | Collect bytes -> Format.fprintf formatter "@[(collect@ %d)@]" bytes
+    | Allocate (len, ty) ->
+        Format.fprintf formatter "@[<2>(allocate@ %d@ %a)@]" len Type.pp ty
+    | GlobalValue label ->
+        Format.fprintf formatter "@[(global-value@ %s)@]" label
 
   and pp_texps formatter exps =
     Format.pp_print_list

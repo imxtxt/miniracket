@@ -23,10 +23,17 @@ type exp =
   | Cmp of cc * atom * atom
   | Not of atom
   | Void
+  | VectorLength of atom
+  | VectorRef of atom * int
+  | VectorSet of atom * int * atom
+  | Allocate of int * Type.ty
+  | GlobalValue of string
 
 type stmt =
   | Assign of string * exp
   | ReadStmt
+  | VectorSetStmt of atom * int * atom
+  | Collect of int
 
 type tail =
   | Return of exp
@@ -75,11 +82,25 @@ module PP = struct
           atom2
     | Not atom1 -> Format.fprintf formatter "(not %a)" pp_atom atom1
     | Void -> Format.fprintf formatter "(void)"
+    | VectorLength atom1 ->
+        Format.fprintf formatter "(vector-length %a)" pp_atom atom1
+    | VectorRef (atom1, idx) ->
+        Format.fprintf formatter "(vector-ref %a %d)" pp_atom atom1 idx
+    | VectorSet (atom1, idx, atom2) ->
+        Format.fprintf formatter "(vector-set! %a %d %a)" pp_atom atom1 idx
+          pp_atom atom2
+    | Allocate (len, ty) ->
+        Format.fprintf formatter "(allocate %d %a)" len Type.pp ty
+    | GlobalValue label -> Format.fprintf formatter "(global-value %s)" label
 
   let pp_stmt formatter (stmt : stmt) =
     match stmt with
     | Assign (var, exp) -> Format.fprintf formatter "%s = %a" var pp_exp exp
     | ReadStmt -> Format.fprintf formatter "(read)"
+    | VectorSetStmt (a1, idx, a2) ->
+        Format.fprintf formatter "(vector-set! %a %d %a)" pp_atom a1 idx pp_atom
+          a2
+    | Collect bytes -> Format.fprintf formatter "(collect %d)" bytes
 
   let rec pp_tail formatter (tail : tail) =
     match tail with
@@ -132,6 +153,8 @@ module DefinedVar = struct
     match stmt with
     | Assign (var, _) -> SetS.singleton var
     | ReadStmt -> SetS.empty
+    | VectorSetStmt _ -> SetS.empty
+    | Collect _ -> SetS.empty
 
   let rec defined_vars_tail (tail : tail) =
     match tail with

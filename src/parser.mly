@@ -42,6 +42,12 @@
 %token WHILE "while"
 %token VOID "void"
 
+// LTup
+%token VECTOR "vector"
+%token VECTORLENGTH "vector-length"
+%token VECTORREF "vector-ref"
+%token VECTORSET "vector-set!"
+
 %token EOF
 
 %type <Ast.texp> texp
@@ -74,7 +80,13 @@ texp:
 | "(" "or" e1 = texp e2 = texp ")"           { {Ast.exp = If (e1, {Ast.exp = Bool true; ty = Integer}, e2); ty = Integer}  }
 
 // LWhile
-| "(" "set!" var = VARIABLE rhs = texp ")"  { {Ast.exp = SetBang (var, rhs); ty = Integer}                       }
-| "(" "begin" es = list(texp) ")"           { let es, e = mk_begin es in {Ast.exp = Begin (es, e); ty = Integer} }
-| "(" "while" cnd = texp body = texp ")"    { {Ast.exp = WhileLoop (cnd, body); ty = Integer}                    }
-| "(" "void" ")"                            { {Ast.exp = Void; ty = Integer}                                     }
+| "(" "set!" var = VARIABLE rhs = texp ")" { {Ast.exp = SetBang (var, rhs); ty = Integer}                       }
+| "(" "begin" es = list(texp) ")"          { let es, e = mk_begin es in {Ast.exp = Begin (es, e); ty = Integer} }
+| "(" "while" cnd = texp body = texp ")"   { {Ast.exp = WhileLoop (cnd, body); ty = Integer}                    }
+| "(" "void" ")"                           { {Ast.exp = Void; ty = Integer}                                     }
+
+// LTup
+| "(" "vector" es = list(texp) ")"                 { {Ast.exp = Vector es; ty = Integer}             }
+| "(" "vector-length" e1 = texp ")"                { {Ast.exp = VectorLength e1; ty = Integer}       }
+| "(" "vector-ref" e1 = texp i = INT ")"           { {Ast.exp = VectorRef (e1, i); ty = Integer}     }
+| "(" "vector-set!" e1 = texp i = INT e2 = texp")" { {Ast.exp = VectorSet (e1, i, e2); ty = Integer} }

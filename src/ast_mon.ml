@@ -31,6 +31,12 @@ and exp =
   | Begin of texp list * texp
   | WhileLoop of texp * texp
   | Void
+  | VectorLength of atom
+  | VectorRef of atom * int
+  | VectorSet of atom * int * atom
+  | Collect of int
+  | Allocate of int * Type.ty
+  | GlobalValue of string
 
 type def = {
   name : string;
@@ -86,6 +92,18 @@ module PP = struct
         Format.fprintf formatter "@[<v 2>(while@ %a@ %a)@]" pp_texp cnd pp_texp
           body
     | Void -> Format.fprintf formatter "@[(void)@]"
+    | VectorLength a ->
+        Format.fprintf formatter "@[<2>(vector-length@ %a)@]" pp_atom a
+    | VectorRef (a1, idx) ->
+        Format.fprintf formatter "@[<2>(vector-ref@ %a@ %d)@]" pp_atom a1 idx
+    | VectorSet (a1, idx, a2) ->
+        Format.fprintf formatter "@[<2>(vector-set!@ %a@ %d@ %a)@]" pp_atom a1
+          idx pp_atom a2
+    | Collect bytes -> Format.fprintf formatter "@[(collect@ %d)@]" bytes
+    | Allocate (len, ty) ->
+        Format.fprintf formatter "@[<2>(allocate@ %d@ %a)@]" len Type.pp ty
+    | GlobalValue label ->
+        Format.fprintf formatter "@[(global-value@ %s)@]" label
 
   and pp_texps formatter exps =
     Format.pp_print_list

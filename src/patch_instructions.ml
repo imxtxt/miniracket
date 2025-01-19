@@ -27,6 +27,8 @@ let patch_instr instr =
   | Jmp lbl -> [ Jmp lbl ]
   | JmpIf (cc, lbl) -> [ JmpIf (cc, lbl) ]
   | Set (cc, arg) -> [ Set (cc, arg) ]
+  | Load (offset, base, dest) -> [ Load (offset, base, dest) ]
+  | Store (src, offset, base) -> [ Store (src, offset, base) ]
 
 let patch_block { instrs; liveafters } =
   let instrs = List.map patch_instr instrs |> List.flatten in

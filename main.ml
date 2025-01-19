@@ -9,6 +9,7 @@ let _ =
   parse Sys.argv.(1)
   |> Type_check.run
   |> Uniquify.run
+  |> Expose_allocation.run
   |> Uncover_get.run
   |> Remove_complex_operands.run
   |> Explicate_control.run

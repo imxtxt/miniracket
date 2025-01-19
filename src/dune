@@ -12,6 +12,7 @@
   ast_mon
   ast
   explicate_control
+  expose_allocation
   graph
   info
   inject_info

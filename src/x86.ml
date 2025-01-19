@@ -6,6 +6,7 @@ type arg =
   | Var of string
   | Deref of int * string
   | ByteReg of string
+  | Global of label
 
 type cc =
   | E
@@ -22,6 +23,8 @@ type op2 =
   | Xorq
   | Cmpq
   | Movzbq
+  | Sarq
+  | Andq
 
 type op1 =
   | Pushq
@@ -35,6 +38,8 @@ type instr =
   | Jmp of label
   | JmpIf of cc * label
   | Set of cc * arg
+  | Load of int * string * string
+  | Store of string * int * string
 
 type block = {
   instrs : instr list;
@@ -57,6 +62,7 @@ module PP = struct
     | Var var -> Format.fprintf formatter "%s" var
     | Deref (idx, reg) -> Format.fprintf formatter "%d(%%%s)" idx reg
     | ByteReg reg -> Format.fprintf formatter "%%%s" reg
+    | Global label -> Format.fprintf formatter "%s(%%rip)" (mangle_label label)
 
   let pp_cc formatter cc =
     match cc with
@@ -75,6 +81,8 @@ module PP = struct
     | Xorq -> Format.fprintf formatter "xorq"
     | Cmpq -> Format.fprintf formatter "cmpq"
     | Movzbq -> Format.fprintf formatter "movzbq"
+    | Sarq -> Format.fprintf formatter "sarq"
+    | Andq -> Format.fprintf formatter "andq"
 
   let pp_opcode1 formatter op1 =
     match op1 with
@@ -95,6 +103,10 @@ module PP = struct
     | JmpIf (cc, label) ->
         Format.fprintf formatter "j%a %s" pp_cc cc (mangle_label label)
     | Set (cc, arg) -> Format.fprintf formatter "set%a %a" pp_cc cc pp_arg arg
+    | Load (offset, base, dest) ->
+        Format.fprintf formatter "movq %d(%%%s), %%%s" offset base dest
+    | Store (src, offset, base) ->
+        Format.fprintf formatter "movq %%%s, %d(%%%s)" src offset base
 
   let pp_instrs formatter { instrs; liveafters } =
     match liveafters with

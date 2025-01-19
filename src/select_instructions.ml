@@ -62,6 +62,59 @@ let select_assign dest (exp : Ir.exp) =
   | Void ->
       let instr1 = Instr2 (Movq, Imm 0, dest) in
       [ instr1 ]
+  | VectorLength atom1 ->
+      let arg1 = select_atom atom1 in
+      let instr1 = Instr2 (Movq, arg1, Reg "rax") in
+      let instr2 = Load (0, "rax", "rax") in
+      let instr3 = Instr2 (Sarq, Imm 1, Reg "rax") in
+      let instr4 = Instr2 (Andq, Imm 0b111111, Reg "rax") in
+      let instr5 = Instr2 (Movq, Reg "rax", dest) in
+      [ instr1; instr2; instr3; instr4; instr5 ]
+  | VectorRef (atom1, idx) ->
+      let arg1 = select_atom atom1 in
+      let offset = (idx + 1) * 8 in
+      let instr1 = Instr2 (Movq, arg1, Reg "rax") in
+      let instr2 = Load (offset, "rax", "rax") in
+      let instr3 = Instr2 (Movq, Reg "rax", dest) in
+      [ instr1; instr2; instr3 ]
+  | VectorSet (atom1, idx, atom2) ->
+      let arg1 = select_atom atom1 in
+      let arg2 = select_atom atom2 in
+      let offset = (idx + 1) * 8 in
+      let instr1 = Instr2 (Movq, arg1, Reg "rax") in
+      let instr2 = Instr2 (Movq, arg2, Reg "r10") in
+      let instr3 = Store ("r10", offset, "rax") in
+      let instr4 = Instr2 (Movq, Imm 0, dest) in
+      [ instr1; instr2; instr3; instr4 ]
+  | Allocate (len, ty) ->
+      let compute_vector_tag = function
+        | Type.Vector tys ->
+            let tag =
+              List.fold_left
+                (fun acc ty ->
+                  let acc = Int.shift_left acc 1 in
+                  if Type.is_pointer ty then Int.logor acc 1 else acc)
+                0 tys
+            in
+            let tag = Int.shift_left tag 6 in
+            let tag = Int.logor tag (List.length tys) in
+            let tag = Int.shift_left tag 1 in
+            let tag = Int.logor tag 1 in
+            tag
+        | _ -> assert false
+      in
+      let tag = compute_vector_tag ty in
+      let bytes = (len + 1) * 8 in
+      let instr1 = Instr2 (Movq, Global "free_ptr", Reg "rax") in
+      let instr2 = Instr2 (Addq, Imm bytes, Global "free_ptr") in
+      let instr3 = Instr2 (Movq, Imm tag, Reg "r10") in
+      let instr4 = Store ("r10", 0, "rax") in
+      let instr5 = Instr2 (Movq, Reg "rax", dest) in
+      [ instr1; instr2; instr3; instr4; instr5 ]
+  | GlobalValue label ->
+      let instr1 = Instr2 (Movq, Global label, Reg "rax") in
+      let instr2 = Instr2 (Movq, Reg "rax", dest) in
+      [ instr1; instr2 ]
 
 let select_stmt (stmt : Ir.stmt) =
   match stmt with
@@ -69,6 +122,19 @@ let select_stmt (stmt : Ir.stmt) =
   | ReadStmt ->
       let instr1 = Callq ("read_int", 0) in
       [ instr1 ]
+  | VectorSetStmt (atom1, idx, atom2) ->
+      let arg1 = select_atom atom1 in
+      let arg2 = select_atom atom2 in
+      let offset = (idx + 1) * 8 in
+      let instr1 = Instr2 (Movq, arg1, Reg "rax") in
+      let instr2 = Instr2 (Movq, arg2, Reg "r10") in
+      let instr3 = Store ("r10", offset, "rax") in
+      [ instr1; instr2; instr3 ]
+  | Collect bytes ->
+      let instr1 = Instr2 (Movq, Reg "r15", Reg "rdi") in
+      let instr2 = Instr2 (Movq, Imm bytes, Reg "rsi") in
+      let instr3 = Callq ("collect", 2) in
+      [ instr1; instr2; instr3 ]
 
 let rec select_tail (info : Info.t) (tail : Ir.tail) =
   match tail with

@@ -55,6 +55,23 @@ let rec rco_exp { A.exp; ty } =
   | A.WhileLoop (cnd, body) ->
       { M.exp = WhileLoop (rco_exp cnd, rco_exp body); ty }
   | A.Void -> { M.exp = Void; ty }
+  | A.Vector _ -> assert false
+  | A.VectorLength e1 ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let new_exp = { M.exp = M.VectorLength e1_atom; ty } in
+      make_lets e1_stmts new_exp
+  | VectorRef (e1, idx) ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let new_exp = { M.exp = M.VectorRef (e1_atom, idx); ty } in
+      make_lets e1_stmts new_exp
+  | VectorSet (e1, idx, e2) ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let e2_stmts, e2_atom = rco_atom e2 in
+      let new_exp = { M.exp = M.VectorSet (e1_atom, idx, e2_atom); ty } in
+      make_lets (e1_stmts @ e2_stmts) new_exp
+  | A.Collect bytes -> { M.exp = M.Collect bytes; ty }
+  | A.Allocate (len, ty) -> { M.exp = M.Allocate (len, ty); ty }
+  | A.GlobalValue _ -> assert false
 
 and rco_atom { A.exp; ty } =
   match exp with
@@ -115,6 +132,29 @@ and rco_atom { A.exp; ty } =
       let new_exp = { M.exp = WhileLoop (rco_exp cnd, rco_exp body); ty } in
       ([ (tmp, new_exp) ], M.Var tmp)
   | A.Void -> ([], M.Void)
+  | A.Vector _ -> assert false
+  | A.VectorLength e1 ->
+      let tmp = gensym () in
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let new_exp = { M.exp = M.VectorLength e1_atom; ty } in
+      (e1_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | A.VectorRef (e1, idx) ->
+      let tmp = gensym () in
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let new_exp = { M.exp = M.VectorRef (e1_atom, idx); ty } in
+      (e1_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | A.VectorSet (e1, idx, e2) ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let e2_stmts, e2_atom = rco_atom e2 in
+      let tmp = gensym () in
+      let new_exp = { M.exp = M.VectorSet (e1_atom, idx, e2_atom); ty } in
+      (e1_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | A.Collect _ -> assert false
+  | A.Allocate _ -> assert false
+  | A.GlobalValue label ->
+      let tmp = gensym () in
+      let new_exp = { M.exp = M.GlobalValue label; ty } in
+      ([ (tmp, new_exp) ], M.Var tmp)
 
 let rco_def { A.name; params; retty; body } =
   let body = rco_exp body in

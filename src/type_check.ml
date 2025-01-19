@@ -67,6 +67,31 @@ let rec check_exp env { A.exp; _ } =
       check_euqal T.Boolean cnd.ty;
       { A.exp = WhileLoop (cnd, body); ty = T.Void }
   | Void -> { A.exp = Void; ty = T.Void }
+  | Vector exps ->
+      let exps = List.map (check_exp env) exps in
+      let tys = List.map (fun { A.ty; _ } -> ty) exps in
+      { A.exp = Vector exps; ty = T.Vector tys }
+  | VectorLength exp -> (
+      let exp = check_exp env exp in
+      match exp.ty with
+      | T.Vector _ -> { A.exp = VectorLength exp; ty = T.Integer }
+      | _ -> raise TypeError)
+  | VectorRef (exp, idx) -> (
+      let exp = check_exp env exp in
+      match exp.ty with
+      | T.Vector tys -> { A.exp = VectorRef (exp, idx); ty = List.nth tys idx }
+      | _ -> raise TypeError)
+  | VectorSet (exp, idx, rhs) -> (
+      let exp = check_exp env exp in
+      let rhs = check_exp env rhs in
+      match exp.ty with
+      | T.Vector tys ->
+          check_euqal (List.nth tys idx) rhs.ty;
+          { A.exp = VectorSet (exp, idx, rhs); ty = T.Void }
+      | _ -> raise TypeError)
+  | Collect _ -> raise TypeError
+  | Allocate _ -> raise TypeError
+  | GlobalValue _ -> raise TypeError
 
 let check_def env { A.name; params; retty; body } =
   let env =

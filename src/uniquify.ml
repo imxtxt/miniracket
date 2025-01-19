@@ -24,6 +24,13 @@ let rec uni_exp env { Ast.exp; ty } =
     | Begin (es, e) -> Begin (List.map (uni_exp env) es, uni_exp env e)
     | WhileLoop (cnd, body) -> WhileLoop (uni_exp env cnd, uni_exp env body)
     | Void -> Void
+    | Vector es -> Vector (List.map (uni_exp env) es)
+    | VectorLength e1 -> VectorLength (uni_exp env e1)
+    | VectorRef (e1, idx) -> VectorRef (uni_exp env e1, idx)
+    | VectorSet (e1, idx, e2) -> VectorSet (uni_exp env e1, idx, uni_exp env e2)
+    | Collect _ -> assert false
+    | Allocate _ -> assert false
+    | GlobalValue _ -> assert false
   in
   { exp = new_exp; ty }
 
