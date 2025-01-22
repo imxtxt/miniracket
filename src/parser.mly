@@ -48,6 +48,13 @@
 %token VECTORREF "vector-ref"
 %token VECTORSET "vector-set!"
 
+// LArray
+%token ARRAY "array"
+%token ARRAYLENGTH "array-length"
+%token ARRAYREF "array-ref"
+%token ARRAYSET "array-set!"
+%token MUL "*"
+
 %token EOF
 
 %type <Ast.texp> texp
@@ -90,3 +97,10 @@ texp:
 | "(" "vector-length" e1 = texp ")"                { {Ast.exp = VectorLength e1; ty = Integer}       }
 | "(" "vector-ref" e1 = texp i = INT ")"           { {Ast.exp = VectorRef (e1, i); ty = Integer}     }
 | "(" "vector-set!" e1 = texp i = INT e2 = texp")" { {Ast.exp = VectorSet (e1, i, e2); ty = Integer} }
+
+// LArray
+| "(" "*" e1 = texp e2 = texp ")"                   { {Ast.exp = Mul (e1, e2); ty = Integer}         }
+| "(" "array" len = texp init = texp ")"            { {Ast.exp = Array (len, init); ty = Integer}    }
+| "(" "array-length" e1 = texp ")"                  { {Ast.exp = ArrayLength e1; ty = Integer}       }
+| "(" "array-ref" e1 = texp i = texp ")"            { {Ast.exp = ArrayRef (e1, i); ty = Integer}     }
+| "(" "array-set!" e1 = texp i = texp e2 = texp ")" { {Ast.exp = ArraySet (e1, i, e2); ty = Integer} }

@@ -22,6 +22,12 @@ let rec check_exp env { A.exp; _ } =
       match (e1.ty, e2.ty) with
       | T.Integer, T.Integer -> { A.exp = A.Sub (e1, e2); ty = T.Integer }
       | _ -> raise TypeError)
+  | Mul (e1, e2) -> (
+      let e1 = check_exp env e1 in
+      let e2 = check_exp env e2 in
+      match (e1.ty, e2.ty) with
+      | T.Integer, T.Integer -> { A.exp = A.Mul (e1, e2); ty = T.Integer }
+      | _ -> raise TypeError)
   | Var var -> { A.exp = A.Var var; ty = MapS.find var env }
   | GetBang _ -> assert false
   | Let (var, init, body) ->
@@ -92,6 +98,33 @@ let rec check_exp env { A.exp; _ } =
   | Collect _ -> raise TypeError
   | Allocate _ -> raise TypeError
   | GlobalValue _ -> raise TypeError
+  | Array (len, init) ->
+      let len = check_exp env len in
+      let init = check_exp env init in
+      check_euqal len.ty T.Integer;
+      { A.exp = Array (len, init); ty = T.Array init.ty }
+  | ArrayLength exp -> (
+      let exp = check_exp env exp in
+      match exp.ty with
+      | T.Array _ -> { A.exp = ArrayLength exp; ty = T.Integer }
+      | _ -> raise TypeError)
+  | ArrayRef (exp, idx) -> (
+      let exp = check_exp env exp in
+      let idx = check_exp env idx in
+      match (exp.ty, idx.ty) with
+      | T.Array ty, T.Integer -> { A.exp = ArrayRef (exp, idx); ty }
+      | _ -> raise TypeError)
+  | ArraySet (exp, idx, rhs) -> (
+      let exp = check_exp env exp in
+      let idx = check_exp env idx in
+      let rhs = check_exp env rhs in
+      match (exp.ty, idx.ty) with
+      | T.Array ty, T.Integer ->
+          check_euqal ty rhs.ty;
+          { A.exp = ArraySet (exp, idx, rhs); ty = T.Void }
+      | _ -> raise TypeError)
+  | Exit -> assert false
+  | AllocateArray _ -> assert false
 
 let check_def env { A.name; params; retty; body } =
   let env =

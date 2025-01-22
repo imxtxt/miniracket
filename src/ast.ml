@@ -15,6 +15,7 @@ and exp =
   | Read
   | Add of texp * texp
   | Sub of texp * texp
+  | Mul of texp * texp
   | Var of string
   | GetBang of string
   | Let of string * texp * texp
@@ -30,9 +31,15 @@ and exp =
   | VectorLength of texp
   | VectorRef of texp * int
   | VectorSet of texp * int * texp
-  | Collect of int
+  | Collect of texp
   | Allocate of int * Type.ty
   | GlobalValue of string
+  | Array of texp * texp
+  | ArrayLength of texp
+  | ArrayRef of texp * texp
+  | ArraySet of texp * texp * texp
+  | Exit
+  | AllocateArray of texp * Type.ty
 
 type def = {
   name : string;
@@ -58,6 +65,8 @@ module PP = struct
         Format.fprintf formatter "@[<2>(+@ %a@ %a)@]" pp_texp e1 pp_texp e2
     | Sub (e1, e2) ->
         Format.fprintf formatter "@[<2>(-@ %a@ %a)@]" pp_texp e1 pp_texp e2
+    | Mul (e1, e2) ->
+        Format.fprintf formatter "@[<2>(*@ %a@ %a)@]" pp_texp e1 pp_texp e2
     | Var var -> Format.fprintf formatter "%s" var
     | GetBang var -> Format.fprintf formatter "@[(get!@ %s)@]" var
     | Let (var, init, body) ->
@@ -89,11 +98,26 @@ module PP = struct
     | VectorSet (e1, idx, e2) ->
         Format.fprintf formatter "@[<2>(vector-set!@ %a@ %d@ %a)@]" pp_texp e1
           idx pp_texp e2
-    | Collect bytes -> Format.fprintf formatter "@[(collect@ %d)@]" bytes
+    | Collect bytes ->
+        Format.fprintf formatter "@[(collect@ %a)@]" pp_texp bytes
     | Allocate (len, ty) ->
         Format.fprintf formatter "@[<2>(allocate@ %d@ %a)@]" len Type.pp ty
     | GlobalValue label ->
         Format.fprintf formatter "@[(global-value@ %s)@]" label
+    | Array (len, init) ->
+        Format.fprintf formatter "@[(array@ %a@ %a)@]" pp_texp len pp_texp init
+    | ArrayLength e ->
+        Format.fprintf formatter "@[<2>(array-length@ %a)@]" pp_texp e
+    | ArrayRef (e1, idx) ->
+        Format.fprintf formatter "@[<2>(array-ref@ %a@ %a)@]" pp_texp e1 pp_texp
+          idx
+    | ArraySet (e1, idx, e2) ->
+        Format.fprintf formatter "@[<2>(array-set!@ %a@ %a@ %a)@]" pp_texp e1
+          pp_texp idx pp_texp e2
+    | Exit -> Format.fprintf formatter "@[(exit)@]"
+    | AllocateArray (e1, ty) ->
+        Format.fprintf formatter "@[<2>(allocate-array@ %a@ %a)@]" pp_texp e1
+          Type.pp ty
 
   and pp_texps formatter exps =
     Format.pp_print_list

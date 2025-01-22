@@ -9,6 +9,7 @@ let _ =
   parse Sys.argv.(1)
   |> Type_check.run
   |> Uniquify.run
+  |> Check_bounds.run
   |> Expose_allocation.run
   |> Uncover_get.run
   |> Remove_complex_operands.run
@@ -20,4 +21,4 @@ let _ =
   |> Allocate_registers.run
   |> Patch_instructions.run
   |> Prelude_conclusion.run
-  |> X86.PP.std_pp
+  |> X86.PP.std_pp 

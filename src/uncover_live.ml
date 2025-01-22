@@ -17,7 +17,10 @@ let arg_loc (arg : arg) =
 
 let instr_read (instr : instr) =
   match instr with
-  | Instr2 ((Addq | Subq | Xorq | Cmpq | Sarq | Andq), arg1, arg2) ->
+  | Instr2
+      ( (Addq | Subq | Xorq | Cmpq | Sarq | Andq | Orq | Imulq | Salq | Shrq),
+        arg1,
+        arg2 ) ->
       SetS.union (arg_loc arg1) (arg_loc arg2)
   | Instr2 ((Movq | Movzbq), arg1, _) -> arg_loc arg1
   | Instr1 ((Pushq | Popq), _) -> raise LivenessError
@@ -33,7 +36,11 @@ let instr_read (instr : instr) =
 
 let instr_write (instr : instr) =
   match instr with
-  | Instr2 ((Addq | Subq | Movq | Xorq | Movzbq | Sarq | Andq), _, arg2) ->
+  | Instr2
+      ( ( Addq | Subq | Movq | Xorq | Movzbq | Sarq | Andq | Orq | Imulq | Salq
+        | Shrq ),
+        _,
+        arg2 ) ->
       arg_loc arg2
   | Instr2 (Cmpq, _, _) -> SetS.empty
   | Instr1 ((Pushq | Popq), _) -> raise LivenessError

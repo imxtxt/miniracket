@@ -2,10 +2,9 @@ open Utilities
 open Type
 open Ast
 
-let is_atom { exp; ty = _ } =
+let is_pure { exp; ty = _ } =
   match exp with
   | Int _
-  | Var _
   | Bool _
   | Void ->
       true
@@ -17,6 +16,7 @@ let rec expose_exp { Ast.exp; ty } =
   | Read -> { Ast.exp = Read; ty }
   | Add (e1, e2) -> { Ast.exp = Add (expose_exp e1, expose_exp e2); ty }
   | Sub (e1, e2) -> { Ast.exp = Sub (expose_exp e1, expose_exp e2); ty }
+  | Mul (e1, e2) -> { Ast.exp = Mul (expose_exp e1, expose_exp e2); ty }
   | Var var -> { Ast.exp = Var var; ty }
   | GetBang _ -> assert false
   | Let (var, init, body) ->
@@ -34,8 +34,6 @@ let rec expose_exp { Ast.exp; ty } =
   | Void -> { Ast.exp = Void; ty }
   | Vector es ->
       (* 
-        (HasType (Prim 'vector (list 1 2)) (Vector Integer Integer)) =>
-
         (let ([tmp1 1])
           (let ([tmp2 2]))
             (begin 
@@ -57,7 +55,7 @@ let rec expose_exp { Ast.exp; ty } =
         List.mapi
           (fun idx (var, exp) ->
             let rhs =
-              match is_atom exp with
+              match is_pure exp with
               | true -> exp
               | false -> { exp = Var var; ty = exp.ty }
             in
@@ -72,12 +70,12 @@ let rec expose_exp { Ast.exp; ty } =
       let end_ast = { exp = GlobalValue "fromspace_end"; ty = Integer } in
       let cmp_ast = { exp = Cmp (Lt, add_ast, end_ast); ty = Boolean } in
       let void_ast = { exp = Void; ty = Void } in
-      let collect_ast = { exp = Collect bytes; ty = Void } in
+      let collect_ast = { exp = Collect bytes_ast; ty = Void } in
       let if_ast = { exp = If (cmp_ast, void_ast, collect_ast); ty = Void } in
       let acc = { exp = Begin ([ if_ast ], acc); ty = acc.ty } in
       List.fold_right
         (fun (var, exp) acc ->
-          if is_atom exp then acc
+          if is_pure exp then acc
           else { exp = Let (var, exp, acc); ty = acc.ty })
         bindings acc
   | VectorLength e1 -> { Ast.exp = VectorLength (expose_exp e1); ty }
@@ -87,6 +85,70 @@ let rec expose_exp { Ast.exp; ty } =
   | Collect _ -> assert false
   | Allocate _ -> assert false
   | GlobalValue _ -> assert false
+  | Array (len_exp, init_exp) ->
+      (* 
+        (let ([len len_exp])
+          (let ([init init_exp])
+            (let ([bytes (+ 8 (mul 8 len))])
+              (begin
+                (if (< (+ bytes free_ptr) fromspace_end)
+                    (void)
+                    (collect bytes))
+                (let (arr (allocate-array len ty))
+                  (let ([idx 0])
+                    (begin
+                      (while (< idx len)
+                        (begin
+                          (array-set! arr idx init)
+                          (set! idx (+ idx 1))))
+                      arr)))))))
+      *)
+      let len_exp = expose_exp len_exp in
+      let init_exp = expose_exp init_exp in
+      let len = gensym () in
+      let init = gensym () in
+      let bytes = gensym () in
+      let arr = gensym () in
+      let idx = gensym () in
+      let len_ast = { exp = Var len; ty = len_exp.ty } in
+      let init_ast = { exp = Var init; ty = init_exp.ty } in
+      let bytes_ast = { exp = Var bytes; ty = Integer } in
+      let arr_ast = { exp = Var arr; ty } in
+      let idx_ast = { exp = Var idx; ty = Integer } in
+      let aset = { exp = ArraySet (arr_ast, idx_ast, init_ast); ty = Void } in
+      let one_ast = { exp = Int 1; ty = Integer } in
+      let incr_idx = { exp = Add (idx_ast, one_ast); ty = Integer } in
+      let idx_set = { exp = SetBang (idx, incr_idx); ty = Void } in
+      let while_cmp = { exp = Cmp (Lt, idx_ast, len_ast); ty = Boolean } in
+      let while_body = { exp = Begin ([ aset ], idx_set); ty = Void } in
+      let while_exp = { exp = WhileLoop (while_cmp, while_body); ty = Void } in
+      let acc = { exp = Begin ([ while_exp ], arr_ast); ty = arr_ast.ty } in
+      let zero_ast = { exp = Int 0; ty = Integer } in
+      let acc = { exp = Let (idx, zero_ast, acc); ty = acc.ty } in
+      let allocate_array = { exp = AllocateArray (len_ast, ty); ty } in
+      let acc = { exp = Let (arr, allocate_array, acc); ty = acc.ty } in
+      let free_ptr_ast = { exp = GlobalValue "free_ptr"; ty = Integer } in
+      let add_ast = { exp = Add (free_ptr_ast, bytes_ast); ty = Integer } in
+      let end_ast = { exp = GlobalValue "fromspace_end"; ty = Integer } in
+      let cmp_ast = { exp = Cmp (Lt, add_ast, end_ast); ty = Boolean } in
+      let void_ast = { exp = Void; ty = Void } in
+      let collect_ast = { exp = Collect bytes_ast; ty = Void } in
+      let if_ast = { exp = If (cmp_ast, void_ast, collect_ast); ty = Void } in
+      let acc = { exp = Begin ([ if_ast ], acc); ty = acc.ty } in
+      let eight_ast = { exp = Int 8; ty = Integer } in
+      let len_bytes = { exp = Mul (len_ast, eight_ast); ty = Integer } in
+      let bytes_rhs = { exp = Add (eight_ast, len_bytes); ty = Integer } in
+      let acc = { exp = Let (bytes, bytes_rhs, acc); ty = acc.ty } in
+      let acc = { exp = Let (init, init_exp, acc); ty = acc.ty } in
+      let acc = { exp = Let (len, len_exp, acc); ty = acc.ty } in
+      acc
+  | ArrayLength e1 -> { Ast.exp = ArrayLength (expose_exp e1); ty }
+  | ArrayRef (e1, idx) ->
+      { Ast.exp = ArrayRef (expose_exp e1, expose_exp idx); ty }
+  | ArraySet (e1, idx, e2) ->
+      { Ast.exp = ArraySet (expose_exp e1, expose_exp idx, expose_exp e2); ty }
+  | Exit -> { Ast.exp = Exit; ty }
+  | AllocateArray _ -> assert false
 
 let expose_def (def : Ast.def) =
   let body = expose_exp def.body in

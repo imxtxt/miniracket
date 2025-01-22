@@ -11,6 +11,7 @@
   allocate_registers
   ast_mon
   ast
+  check_bounds
   explicate_control
   expose_allocation
   graph

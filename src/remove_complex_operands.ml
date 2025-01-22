@@ -29,6 +29,11 @@ let rec rco_exp { A.exp; ty } =
       let e2_stmts, e2_atom = rco_atom e2 in
       let new_exp = { M.exp = M.Sub (e1_atom, e2_atom); ty } in
       make_lets (e1_stmts @ e2_stmts) new_exp
+  | A.Mul (e1, e2) ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let e2_stmts, e2_atom = rco_atom e2 in
+      let new_exp = { M.exp = M.Mul (e1_atom, e2_atom); ty } in
+      make_lets (e1_stmts @ e2_stmts) new_exp
   | A.Var var -> { M.exp = M.Var var; ty }
   | A.GetBang var -> { M.exp = M.Var var; ty }
   | A.Let (var, init, body) ->
@@ -69,9 +74,32 @@ let rec rco_exp { A.exp; ty } =
       let e2_stmts, e2_atom = rco_atom e2 in
       let new_exp = { M.exp = M.VectorSet (e1_atom, idx, e2_atom); ty } in
       make_lets (e1_stmts @ e2_stmts) new_exp
-  | A.Collect bytes -> { M.exp = M.Collect bytes; ty }
+  | A.Collect bytes ->
+      let bytes_stmts, bytes_atom = rco_atom bytes in
+      make_lets bytes_stmts { M.exp = M.Collect bytes_atom; ty }
   | A.Allocate (len, ty) -> { M.exp = M.Allocate (len, ty); ty }
   | A.GlobalValue _ -> assert false
+  | A.Array _ -> assert false
+  | A.ArrayLength e1 ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let new_exp = { M.exp = M.ArrayLength e1_atom; ty } in
+      make_lets e1_stmts new_exp
+  | A.ArrayRef (e1, e2) ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let e2_stmts, e2_atom = rco_atom e2 in
+      let new_exp = { M.exp = M.ArrayRef (e1_atom, e2_atom); ty } in
+      make_lets (e1_stmts @ e2_stmts) new_exp
+  | A.ArraySet (e1, idx, e2) ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let idx_stmts, idx_atom = rco_atom idx in
+      let e2_stmts, e2_atom = rco_atom e2 in
+      let new_exp = { M.exp = M.ArraySet (e1_atom, idx_atom, e2_atom); ty } in
+      make_lets (e1_stmts @ idx_stmts @ e2_stmts) new_exp
+  | A.Exit -> { M.exp = M.Exit; ty }
+  | A.AllocateArray (len, ty) ->
+      let len_stmts, len_atom = rco_atom len in
+      let new_exp = { M.exp = AllocateArray (len_atom, ty); ty } in
+      make_lets len_stmts new_exp
 
 and rco_atom { A.exp; ty } =
   match exp with
@@ -91,6 +119,12 @@ and rco_atom { A.exp; ty } =
       let e2_stmts, e2_atom = rco_atom e2 in
       let tmp = gensym () in
       let new_exp = { M.exp = M.Sub (e1_atom, e2_atom); ty } in
+      (e1_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | A.Mul (e1, e2) ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let e2_stmts, e2_atom = rco_atom e2 in
+      let tmp = gensym () in
+      let new_exp = { M.exp = M.Mul (e1_atom, e2_atom); ty } in
       (e1_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
   | A.Var var -> ([], M.Var var)
   | A.GetBang var ->
@@ -155,6 +189,27 @@ and rco_atom { A.exp; ty } =
       let tmp = gensym () in
       let new_exp = { M.exp = M.GlobalValue label; ty } in
       ([ (tmp, new_exp) ], M.Var tmp)
+  | A.Array _ -> assert false
+  | A.ArrayLength e1 ->
+      let tmp = gensym () in
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let new_exp = { M.exp = M.ArrayLength e1_atom; ty } in
+      (e1_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | A.ArrayRef (e1, e2) ->
+      let tmp = gensym () in
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let e2_stmts, e2_atom = rco_atom e2 in
+      let new_exp = { M.exp = M.ArrayRef (e1_atom, e2_atom); ty } in
+      (e1_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | A.ArraySet (e1, idx, e2) ->
+      let tmp = gensym () in
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let idx_stmts, idx_atom = rco_atom idx in
+      let e2_stmts, e2_atom = rco_atom e2 in
+      let new_exp = { M.exp = M.ArraySet (e1_atom, idx_atom, e2_atom); ty } in
+      (e1_stmts @ idx_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | A.Exit -> assert false
+  | A.AllocateArray _ -> assert false
 
 let rco_def { A.name; params; retty; body } =
   let body = rco_exp body in

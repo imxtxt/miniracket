@@ -37,6 +37,7 @@ let rec explicate_tail { A.exp; _ } =
   | A.Read -> I.Return I.Read
   | A.Add (a1, a2) -> I.Return (I.Add (to_ir_atom a1, to_ir_atom a2))
   | A.Sub (a1, a2) -> I.Return (I.Sub (to_ir_atom a1, to_ir_atom a2))
+  | A.Mul (a1, a2) -> I.Return (I.Mul (to_ir_atom a1, to_ir_atom a2))
   | A.Var var -> I.Return (I.Var var)
   | A.Let (var, init, body) ->
       Hashtbl.add locals_types var init.ty;
@@ -65,6 +66,13 @@ let rec explicate_tail { A.exp; _ } =
   | A.Collect _ -> raise IrError
   | A.Allocate _ -> raise IrError
   | A.GlobalValue _ -> raise IrError
+  | A.ArrayLength a1 -> I.Return (I.ArrayLength (to_ir_atom a1))
+  | A.ArrayRef (a1, idx) ->
+      I.Return (I.ArrayRef (to_ir_atom a1, to_ir_atom idx))
+  | A.ArraySet (a1, idx, a2) ->
+      I.Return (I.ArraySet (to_ir_atom a1, to_ir_atom idx, to_ir_atom a2))
+  | A.Exit -> I.Exit
+  | A.AllocateArray _ -> raise IrError
 
 and explicate_assign { A.exp; _ } var cont =
   match exp with
@@ -74,6 +82,8 @@ and explicate_assign { A.exp; _ } var cont =
       I.Seq (I.Assign (var, I.Add (to_ir_atom a1, to_ir_atom a2)), cont)
   | A.Sub (a1, a2) ->
       I.Seq (I.Assign (var, I.Sub (to_ir_atom a1, to_ir_atom a2)), cont)
+  | A.Mul (a1, a2) ->
+      I.Seq (I.Assign (var, I.Mul (to_ir_atom a1, to_ir_atom a2)), cont)
   | A.Var v -> I.Seq (I.Assign (var, I.Var v), cont)
   | A.Let (v, init, body) ->
       Hashtbl.add locals_types v init.ty;
@@ -109,13 +119,26 @@ and explicate_assign { A.exp; _ } var cont =
   | A.Collect _ -> raise IrError
   | A.Allocate (len, ty) -> I.Seq (I.Assign (var, I.Allocate (len, ty)), cont)
   | A.GlobalValue label -> I.Seq (I.Assign (var, I.GlobalValue label), cont)
+  | A.ArrayLength a1 ->
+      I.Seq (I.Assign (var, I.ArrayLength (to_ir_atom a1)), cont)
+  | A.ArrayRef (a1, idx) ->
+      I.Seq (I.Assign (var, I.ArrayRef (to_ir_atom a1, to_ir_atom idx)), cont)
+  | A.ArraySet (a1, idx, a2) ->
+      let a1 = to_ir_atom a1 in
+      let idx = to_ir_atom idx in
+      let a2 = to_ir_atom a2 in
+      I.Seq (I.Assign (var, I.ArraySet (a1, idx, a2)), cont)
+  | A.Exit -> I.Exit
+  | A.AllocateArray (len, ty) ->
+      I.Seq (I.Assign (var, I.AllocateArray (to_ir_atom len, ty)), cont)
 
 and explicate_pred { A.exp; ty } thn_cont els_cont =
   match exp with
   | A.Int _
   | A.Read
   | A.Add _
-  | A.Sub _ ->
+  | A.Sub _
+  | A.Mul _ ->
       raise IrError
   | A.Var var ->
       let thn_label = create_block thn_cont in
@@ -161,6 +184,15 @@ and explicate_pred { A.exp; ty } thn_cont els_cont =
   | A.Collect _ -> raise IrError
   | A.Allocate _ -> raise IrError
   | A.GlobalValue _ -> raise IrError
+  | A.ArrayLength _ -> raise IrError
+  | A.ArrayRef (a1, idx) ->
+      let tmp = gensym () in
+      Hashtbl.add locals_types tmp ty;
+      let cont = explicate_pred { A.exp = A.Var tmp; ty } thn_cont els_cont in
+      explicate_assign { A.exp = A.ArrayRef (a1, idx); ty } tmp cont
+  | A.ArraySet _ -> raise IrError
+  | A.Exit -> I.Exit
+  | A.AllocateArray _ -> raise IrError
 
 and explicate_effect { A.exp; _ } cont =
   match exp with
@@ -168,6 +200,7 @@ and explicate_effect { A.exp; _ } cont =
   | A.Read -> I.Seq (I.ReadStmt, cont)
   | A.Add _ -> cont
   | A.Sub _ -> cont
+  | A.Mul _ -> cont
   | A.Var _ -> cont
   | A.Let (var, init, body) ->
       Hashtbl.add locals_types var init.ty;
@@ -191,9 +224,18 @@ and explicate_effect { A.exp; _ } cont =
   | A.VectorRef _ -> cont
   | A.VectorSet (a1, idx, a2) ->
       I.Seq (I.VectorSetStmt (to_ir_atom a1, idx, to_ir_atom a2), cont)
-  | A.Collect bytes -> I.Seq (I.Collect bytes, cont)
+  | A.Collect bytes -> I.Seq (I.Collect (to_ir_atom bytes), cont)
   | A.Allocate _ -> raise IrError
   | A.GlobalValue _ -> raise IrError
+  | A.ArrayLength _ -> cont
+  | A.ArrayRef _ -> cont
+  | A.ArraySet (a1, idx, a2) ->
+      let a1 = to_ir_atom a1 in
+      let idx = to_ir_atom idx in
+      let a2 = to_ir_atom a2 in
+      I.Seq (I.ArraySetStmt (a1, idx, a2), cont)
+  | A.Exit -> I.Exit
+  | A.AllocateArray _ -> raise IrError
 
 and explicate_while cnd body els_cont =
   let start_label = genlabel () in

@@ -8,6 +8,7 @@ let rec uni_exp env { Ast.exp; ty } =
     | Read -> Read
     | Add (e1, e2) -> Add (uni_exp env e1, uni_exp env e2)
     | Sub (e1, e2) -> Sub (uni_exp env e1, uni_exp env e2)
+    | Mul (e1, e2) -> Mul (uni_exp env e1, uni_exp env e2)
     | Var var -> Var (MapS.find var env)
     | GetBang _ -> assert false
     | Let (var, init, body) ->
@@ -31,6 +32,13 @@ let rec uni_exp env { Ast.exp; ty } =
     | Collect _ -> assert false
     | Allocate _ -> assert false
     | GlobalValue _ -> assert false
+    | Array (len, init) -> Array (uni_exp env len, uni_exp env init)
+    | ArrayLength e1 -> ArrayLength (uni_exp env e1)
+    | ArrayRef (e1, idx) -> ArrayRef (uni_exp env e1, uni_exp env idx)
+    | ArraySet (e1, idx, e2) ->
+        ArraySet (uni_exp env e1, uni_exp env idx, uni_exp env e2)
+    | Exit -> assert false
+    | AllocateArray _ -> assert false
   in
   { exp = new_exp; ty }
 

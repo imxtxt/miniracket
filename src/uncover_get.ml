@@ -7,6 +7,7 @@ let rec collect_set { Ast.exp; ty = _ } =
   | Read -> SetS.empty
   | Add (exp1, exp2) -> collect_sets [ exp1; exp2 ]
   | Sub (exp1, exp2) -> collect_sets [ exp1; exp2 ]
+  | Mul (exp1, exp2) -> collect_sets [ exp1; exp2 ]
   | Var _ -> SetS.empty
   | GetBang _ -> assert false
   | Let (_, init, body) -> collect_sets [ init; body ]
@@ -25,6 +26,12 @@ let rec collect_set { Ast.exp; ty = _ } =
   | Collect _ -> SetS.empty
   | Allocate _ -> SetS.empty
   | GlobalValue _ -> SetS.empty
+  | Array _ -> assert false
+  | ArrayLength exp1 -> collect_set exp1
+  | ArrayRef (exp1, idx) -> collect_sets [ exp1; idx ]
+  | ArraySet (exp1, idx, exp2) -> collect_sets [ exp1; idx; exp2 ]
+  | Exit -> SetS.empty
+  | AllocateArray (exp1, _) -> collect_set exp1
 
 and collect_sets exps =
   List.fold_left
@@ -39,6 +46,7 @@ let uncover_get_exp set_vars exp =
       | Read -> Read
       | Add (e1, e2) -> Add (helper e1, helper e2)
       | Sub (e1, e2) -> Sub (helper e1, helper e2)
+      | Mul (e1, e2) -> Mul (helper e1, helper e2)
       | Var var -> if SetS.mem var set_vars then GetBang var else Var var
       | GetBang _ -> assert false
       | Let (var, init, body) -> Let (var, helper init, helper body)
@@ -57,6 +65,12 @@ let uncover_get_exp set_vars exp =
       | Collect bytes -> Collect bytes
       | Allocate (len, ty) -> Allocate (len, ty)
       | GlobalValue label -> GlobalValue label
+      | Array _ -> assert false
+      | ArrayLength e1 -> ArrayLength (helper e1)
+      | ArrayRef (e1, idx) -> ArrayRef (helper e1, helper idx)
+      | ArraySet (e1, idx, e2) -> ArraySet (helper e1, helper idx, helper e2)
+      | Exit -> Exit
+      | AllocateArray (e1, ty) -> AllocateArray (helper e1, ty)
     in
     { Ast.exp; ty }
   in

@@ -18,6 +18,7 @@ type exp =
   | Read
   | Add of atom * atom
   | Sub of atom * atom
+  | Mul of atom * atom
   | Var of string
   | Bool of bool
   | Cmp of cc * atom * atom
@@ -28,18 +29,24 @@ type exp =
   | VectorSet of atom * int * atom
   | Allocate of int * Type.ty
   | GlobalValue of string
+  | ArrayLength of atom
+  | ArrayRef of atom * atom
+  | ArraySet of atom * atom * atom
+  | AllocateArray of atom * Type.ty
 
 type stmt =
   | Assign of string * exp
   | ReadStmt
   | VectorSetStmt of atom * int * atom
-  | Collect of int
+  | Collect of atom
+  | ArraySetStmt of atom * atom * atom
 
 type tail =
   | Return of exp
   | Seq of stmt * tail
   | Goto of label
   | IfStmt of cc * atom * atom * label * label
+  | Exit
 
 type def = {
   name : label;
@@ -74,6 +81,8 @@ module PP = struct
         Format.fprintf formatter "(+ %a %a)" pp_atom atom1 pp_atom atom2
     | Sub (atom1, atom2) ->
         Format.fprintf formatter "(- %a %a)" pp_atom atom1 pp_atom atom2
+    | Mul (atom1, atom2) ->
+        Format.fprintf formatter "(* %a %a)" pp_atom atom1 pp_atom atom2
     | Var var -> Format.fprintf formatter "%s" var
     | Bool true -> Format.fprintf formatter "#t"
     | Bool false -> Format.fprintf formatter "#f"
@@ -92,6 +101,15 @@ module PP = struct
     | Allocate (len, ty) ->
         Format.fprintf formatter "(allocate %d %a)" len Type.pp ty
     | GlobalValue label -> Format.fprintf formatter "(global-value %s)" label
+    | ArrayLength atom1 ->
+        Format.fprintf formatter "(array-length %a)" pp_atom atom1
+    | ArrayRef (atom1, idx) ->
+        Format.fprintf formatter "(array-ref %a %a)" pp_atom atom1 pp_atom idx
+    | ArraySet (atom1, idx, atom2) ->
+        Format.fprintf formatter "(array-set! %a %a %a)" pp_atom atom1 pp_atom
+          idx pp_atom atom2
+    | AllocateArray (len, ty) ->
+        Format.fprintf formatter "(allocate-array %a %a)" pp_atom len Type.pp ty
 
   let pp_stmt formatter (stmt : stmt) =
     match stmt with
@@ -100,7 +118,10 @@ module PP = struct
     | VectorSetStmt (a1, idx, a2) ->
         Format.fprintf formatter "(vector-set! %a %d %a)" pp_atom a1 idx pp_atom
           a2
-    | Collect bytes -> Format.fprintf formatter "(collect %d)" bytes
+    | Collect bytes -> Format.fprintf formatter "(collect %a)" pp_atom bytes
+    | ArraySetStmt (a1, idx, a2) ->
+        Format.fprintf formatter "(array-set! %a %a %a)" pp_atom a1 pp_atom idx
+          pp_atom a2
 
   let rec pp_tail formatter (tail : tail) =
     match tail with
@@ -111,6 +132,7 @@ module PP = struct
     | IfStmt (cc, a1, a2, thn, els) ->
         Format.fprintf formatter "if (%a %a %a) goto %s; else goto %s;" pp_cc cc
           pp_atom a1 pp_atom a2 thn els
+    | Exit -> Format.fprintf formatter "exit"
 
   let pp_block formatter (label, tail) =
     Format.fprintf formatter "@[<v 2>%s:@,%a@]" label pp_tail tail
@@ -155,6 +177,7 @@ module DefinedVar = struct
     | ReadStmt -> SetS.empty
     | VectorSetStmt _ -> SetS.empty
     | Collect _ -> SetS.empty
+    | ArraySetStmt _ -> SetS.empty
 
   let rec defined_vars_tail (tail : tail) =
     match tail with
@@ -163,6 +186,7 @@ module DefinedVar = struct
         SetS.union (defined_vars_stmt stmt) (defined_vars_tail tail)
     | Goto _ -> SetS.empty
     | IfStmt _ -> SetS.empty
+    | Exit -> SetS.empty
 
   let defined_vars_def { params; blocks; _ } =
     let defined_vars =
@@ -184,6 +208,7 @@ module CFG = struct
     | Seq (_, tail) -> succs conclusion_label tail
     | Goto label -> SetS.singleton label
     | IfStmt (_, _, _, thn_lbl, els_lbl) -> SetS.of_list [ thn_lbl; els_lbl ]
+    | Exit -> SetS.empty
 
   let make_cfg { blocks; info; _ } =
     List.fold_left

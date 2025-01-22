@@ -37,6 +37,11 @@ rule token = parse
   | "vector-length"             { VECTORLENGTH            }
   | "vector-ref"                { VECTORREF               }
   | "vector-set!"               { VECTORSET               }
+  | "array"                     { ARRAY                   }
+  | "array-length"              { ARRAYLENGTH             }
+  | "array-ref"                 { ARRAYREF                }
+  | "array-set!"                { ARRAYSET                }
+  | "*"                         { MUL                     }
   | lower ident_suffix* as lxm  { VARIABLE lxm            }
   | digit+ as lxm               { INT (int_of_string lxm) }
   | eof                         { EOF                     }

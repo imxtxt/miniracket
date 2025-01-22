@@ -21,6 +21,7 @@ and exp =
   | Read
   | Add of atom * atom
   | Sub of atom * atom
+  | Mul of atom * atom
   | Var of string
   | Let of string * texp * texp
   | Bool of bool
@@ -34,9 +35,14 @@ and exp =
   | VectorLength of atom
   | VectorRef of atom * int
   | VectorSet of atom * int * atom
-  | Collect of int
+  | Collect of atom
   | Allocate of int * Type.ty
   | GlobalValue of string
+  | ArrayLength of atom
+  | ArrayRef of atom * atom
+  | ArraySet of atom * atom * atom
+  | Exit
+  | AllocateArray of atom * Type.ty
 
 type def = {
   name : string;
@@ -70,6 +76,8 @@ module PP = struct
         Format.fprintf formatter "@[<2>(+@ %a@ %a)@]" pp_atom a1 pp_atom a2
     | Sub (a1, a2) ->
         Format.fprintf formatter "@[<2>(-@ %a@ %a)@]" pp_atom a1 pp_atom a2
+    | Mul (a1, a2) ->
+        Format.fprintf formatter "@[<2>(*@ %a@ %a)@]" pp_atom a1 pp_atom a2
     | Var var -> Format.fprintf formatter "%s" var
     | Let (var, init, body) ->
         Format.fprintf formatter "@[<2>(let@ ([%s@ %a])@ %a)@]" var pp_texp init
@@ -99,11 +107,24 @@ module PP = struct
     | VectorSet (a1, idx, a2) ->
         Format.fprintf formatter "@[<2>(vector-set!@ %a@ %d@ %a)@]" pp_atom a1
           idx pp_atom a2
-    | Collect bytes -> Format.fprintf formatter "@[(collect@ %d)@]" bytes
+    | Collect bytes ->
+        Format.fprintf formatter "@[(collect@ %a)@]" pp_atom bytes
     | Allocate (len, ty) ->
         Format.fprintf formatter "@[<2>(allocate@ %d@ %a)@]" len Type.pp ty
     | GlobalValue label ->
         Format.fprintf formatter "@[(global-value@ %s)@]" label
+    | ArrayLength e ->
+        Format.fprintf formatter "@[<2>(array-length@ %a)@]" pp_atom e
+    | ArrayRef (e1, idx) ->
+        Format.fprintf formatter "@[<2>(array-ref@ %a@ %a)@]" pp_atom e1 pp_atom
+          idx
+    | ArraySet (e1, idx, e2) ->
+        Format.fprintf formatter "@[<2>(array-set!@ %a@ %a@ %a)@]" pp_atom e1
+          pp_atom idx pp_atom e2
+    | Exit -> Format.fprintf formatter "@[(exit)@]"
+    | AllocateArray (e1, ty) ->
+        Format.fprintf formatter "@[<2>(allocate-array@ %a@ %a)@]" pp_atom e1
+          Type.pp ty
 
   and pp_texps formatter exps =
     Format.pp_print_list

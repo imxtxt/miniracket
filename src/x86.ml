@@ -25,6 +25,10 @@ type op2 =
   | Movzbq
   | Sarq
   | Andq
+  | Orq
+  | Imulq
+  | Salq
+  | Shrq
 
 type op1 =
   | Pushq
@@ -83,6 +87,10 @@ module PP = struct
     | Movzbq -> Format.fprintf formatter "movzbq"
     | Sarq -> Format.fprintf formatter "sarq"
     | Andq -> Format.fprintf formatter "andq"
+    | Imulq -> Format.fprintf formatter "imulq"
+    | Salq -> Format.fprintf formatter "salq"
+    | Shrq -> Format.fprintf formatter "shrq"
+    | Orq -> Format.fprintf formatter "orq"
 
   let pp_opcode1 formatter op1 =
     match op1 with
