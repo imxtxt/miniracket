@@ -73,6 +73,8 @@ let rec explicate_tail { A.exp; _ } =
       I.Return (I.ArraySet (to_ir_atom a1, to_ir_atom idx, to_ir_atom a2))
   | A.Exit -> I.Exit
   | A.AllocateArray _ -> raise IrError
+  | A.Apply (a1, args) -> I.TailCall (to_ir_atom a1, List.map to_ir_atom args)
+  | A.FunRef (f, arity) -> I.Return (I.FunRef (f, arity))
 
 and explicate_assign { A.exp; _ } var cont =
   match exp with
@@ -131,6 +133,10 @@ and explicate_assign { A.exp; _ } var cont =
   | A.Exit -> I.Exit
   | A.AllocateArray (len, ty) ->
       I.Seq (I.Assign (var, I.AllocateArray (to_ir_atom len, ty)), cont)
+  | A.Apply (a1, args) ->
+      I.Seq
+        (I.Assign (var, I.Call (to_ir_atom a1, List.map to_ir_atom args)), cont)
+  | A.FunRef (f, arity) -> I.Seq (I.Assign (var, I.FunRef (f, arity)), cont)
 
 and explicate_pred { A.exp; ty } thn_cont els_cont =
   match exp with
@@ -160,7 +166,7 @@ and explicate_pred { A.exp; ty } thn_cont els_cont =
       let thn_label = create_block thn_cont in
       let els_label = create_block els_cont in
       I.IfStmt (to_ir_cc cc, to_ir_atom a1, to_ir_atom a2, thn_label, els_label)
-  | A.Not (Int _) -> raise IrError
+  | A.Not (A.Int _) -> raise IrError
   | A.Not (A.Var var) ->
       let thn_label = create_block thn_cont in
       let els_label = create_block els_cont in
@@ -193,8 +199,14 @@ and explicate_pred { A.exp; ty } thn_cont els_cont =
   | A.ArraySet _ -> raise IrError
   | A.Exit -> I.Exit
   | A.AllocateArray _ -> raise IrError
+  | A.Apply (a1, args) ->
+      let tmp = gensym () in
+      Hashtbl.add locals_types tmp ty;
+      let cont = explicate_pred { A.exp = A.Var tmp; ty } thn_cont els_cont in
+      explicate_assign { A.exp = A.Apply (a1, args); ty } tmp cont
+  | FunRef _ -> assert false
 
-and explicate_effect { A.exp; _ } cont =
+and explicate_effect { A.exp; ty } cont =
   match exp with
   | A.Int _ -> cont
   | A.Read -> I.Seq (I.ReadStmt, cont)
@@ -236,6 +248,11 @@ and explicate_effect { A.exp; _ } cont =
       I.Seq (I.ArraySetStmt (a1, idx, a2), cont)
   | A.Exit -> I.Exit
   | A.AllocateArray _ -> raise IrError
+  | A.Apply (a1, args) ->
+      let tmp = gensym () in
+      Hashtbl.add locals_types tmp ty;
+      explicate_assign { A.exp = A.Apply (a1, args); ty } tmp cont
+  | A.FunRef _ -> cont
 
 and explicate_while cnd body els_cont =
   let start_label = genlabel () in

@@ -29,6 +29,7 @@ type op2 =
   | Imulq
   | Salq
   | Shrq
+  | Leaq
 
 type op1 =
   | Pushq
@@ -44,6 +45,9 @@ type instr =
   | Set of cc * arg
   | Load of int * string * string
   | Store of string * int * string
+  | IndirectCallq of arg * int
+  | TailJmp of arg * int
+  | IndirectJmp of arg
 
 type block = {
   instrs : instr list;
@@ -91,6 +95,7 @@ module PP = struct
     | Salq -> Format.fprintf formatter "salq"
     | Shrq -> Format.fprintf formatter "shrq"
     | Orq -> Format.fprintf formatter "orq"
+    | Leaq -> Format.fprintf formatter "leaq"
 
   let pp_opcode1 formatter op1 =
     match op1 with
@@ -115,6 +120,10 @@ module PP = struct
         Format.fprintf formatter "movq %d(%%%s), %%%s" offset base dest
     | Store (src, offset, base) ->
         Format.fprintf formatter "movq %%%s, %d(%%%s)" src offset base
+    | IndirectCallq (arg, _arity) ->
+        Format.fprintf formatter "callq *%a" pp_arg arg
+    | TailJmp (arg, _arity) -> Format.fprintf formatter "tailjmp %a" pp_arg arg
+    | IndirectJmp arg -> Format.fprintf formatter "jmp *%a" pp_arg arg
 
   let pp_instrs formatter { instrs; liveafters } =
     match liveafters with

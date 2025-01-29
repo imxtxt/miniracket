@@ -29,6 +29,15 @@ module AssignHomes = struct
         Set (cc, arg1)
     | Load (offset, base, dest) -> Load (offset, base, dest)
     | Store (src, offset, base) -> Store (src, offset, base)
+    | IndirectCallq (arg, arity) ->
+        let arg = assign_home_arg env arg in
+        IndirectCallq (arg, arity)
+    | TailJmp (arg, arity) ->
+        let arg = assign_home_arg env arg in
+        TailJmp (arg, arity)
+    | IndirectJmp arg ->
+        let arg = assign_home_arg env arg in
+        IndirectJmp arg
 
   let assign_home_block env { instrs; liveafters = _ } =
     let instrs = List.map (assign_home_instr env) instrs in

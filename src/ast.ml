@@ -40,6 +40,8 @@ and exp =
   | ArraySet of texp * texp * texp
   | Exit
   | AllocateArray of texp * Type.ty
+  | Apply of texp * texp list
+  | FunRef of string * int
 
 type def = {
   name : string;
@@ -118,6 +120,10 @@ module PP = struct
     | AllocateArray (e1, ty) ->
         Format.fprintf formatter "@[<2>(allocate-array@ %a@ %a)@]" pp_texp e1
           Type.pp ty
+    | Apply (e1, es) ->
+        Format.fprintf formatter "@[(%a@ %a)@]" pp_texp e1 pp_texps es
+    | FunRef (f, arity) ->
+        Format.fprintf formatter "@[(fun-ref@ %s@ %d)@]" f arity
 
   and pp_texps formatter exps =
     Format.pp_print_list

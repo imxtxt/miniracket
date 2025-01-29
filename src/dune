@@ -20,10 +20,12 @@
   interference_graph
   ir
   lexer
+  limit_functions
   parser
   patch_instructions
   prelude_conclusion
   remove_complex_operands
+  reveal_functions
   select_instructions
   type_check
   type

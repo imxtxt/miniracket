@@ -55,21 +55,33 @@
 %token ARRAYSET "array-set!"
 %token MUL "*"
 
+// LFun
+%token DEFINE "define"
+%token COLON ":"
+%token ARROW "->"
+%token TINTEGER "Integer"
+%token TBOOLEAN "Boolean"
+%token TVOID "Void"
+%token TVECTOR "Vector"
+%token TARRAY "Array"
+
 %token EOF
 
 %type <Ast.texp> texp
+%type <Ast.def> def
+%type <Type.ty> ty
 %start <Ast.def list> start
 
 %%
 start:
-| body = texp EOF { [{Ast.name = "main"; params = []; retty = Type.Integer; body}] }
+| fs = list(def) EOF { fs }
 
 texp:
 // LVar
 | num = INT                                                            { {Ast.exp = Int num; ty = Integer}               }
 | "(" "read" ")"                                                       { {Ast.exp = Read; ty = Integer}                  }
-| "(" "+"  e1 = texp e2 = texp ")"                                     { {Ast.exp = Add (e1, e2); ty = Integer}          }
-| "(" "-"  e1 = texp e2 = texp ")"                                     { {Ast.exp = Sub (e1, e2); ty = Integer}          }
+| "(" "+" e1 = texp e2 = texp ")"                                      { {Ast.exp = Add (e1, e2); ty = Integer}          }
+| "(" "-" e1 = texp e2 = texp ")"                                      { {Ast.exp = Sub (e1, e2); ty = Integer}          }
 | var = VARIABLE                                                       { {Ast.exp = Var var; ty = Integer}               }
 | "(" "let" "(" "[" var = VARIABLE init = texp "]" ")" body = texp ")" { {Ast.exp = Let (var, init, body); ty = Integer} }
 
@@ -104,3 +116,23 @@ texp:
 | "(" "array-length" e1 = texp ")"                  { {Ast.exp = ArrayLength e1; ty = Integer}       }
 | "(" "array-ref" e1 = texp i = texp ")"            { {Ast.exp = ArrayRef (e1, i); ty = Integer}     }
 | "(" "array-set!" e1 = texp i = texp e2 = texp ")" { {Ast.exp = ArraySet (e1, i, e2); ty = Integer} }
+
+// Lfun
+| "(" e1 = texp args = list(texp) ")" { {Ast.exp = Apply (e1, args); ty = Integer} }
+
+
+// Lfun
+def:
+| "(" "define" "(" n = VARIABLE ps = list(param) ")" ":" t = ty b = texp ")" { {Ast.name = n; params = ps; retty = t; body = b}        }
+| body = texp                                                                { {Ast.name = "main"; params = []; retty = Integer; body} }
+
+param:
+| "[" v = VARIABLE ":" t = ty "]" { (v, t) }
+
+ty:
+| "Integer"                             { Integer              }
+| "Boolean"                             { Boolean              }
+| "Void"                                { Void                 }
+| "(" "Vector" ts = list(ty) ")"        { Vector ts            }
+| "(" "Array" t = ty  ")"               { Array t              }
+| "(" pt = list(ty) "->" retty = ty ")" { Function (pt, retty) }

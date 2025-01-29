@@ -39,6 +39,11 @@ let rec uni_exp env { Ast.exp; ty } =
         ArraySet (uni_exp env e1, uni_exp env idx, uni_exp env e2)
     | Exit -> assert false
     | AllocateArray _ -> assert false
+    | Apply (callee, args) ->
+        let callee = uni_exp env callee in
+        let args = List.map (uni_exp env) args in
+        Apply (callee, args)
+    | FunRef _ -> assert false
   in
   { exp = new_exp; ty }
 

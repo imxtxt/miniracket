@@ -125,6 +125,17 @@ let rec check_exp env { A.exp; _ } =
       | _ -> raise TypeError)
   | Exit -> assert false
   | AllocateArray _ -> assert false
+  | Apply (callee, args) -> (
+      let callee = check_exp env callee in
+      let args = List.map (check_exp env) args in
+      match callee.ty with
+      | T.Function (params, retty) ->
+          if List.length params <> List.length args then raise TypeError
+          else
+            let _ = List.iter2 (fun p a -> check_euqal p a.A.ty) params args in
+            { A.exp = Apply (callee, args); ty = retty }
+      | _ -> raise TypeError)
+  | FunRef _ -> assert false
 
 let check_def env { A.name; params; retty; body } =
   let env =

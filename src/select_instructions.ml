@@ -41,9 +41,10 @@ let select_assign dest (exp : Ir.exp) =
   | Mul (atom1, atom2) ->
       let arg1 = select_atom atom1 in
       let arg2 = select_atom atom2 in
-      let instr1 = Instr2 (Movq, arg1, dest) in
-      let instr2 = Instr2 (Imulq, arg2, dest) in
-      [ instr1; instr2 ]
+      let instr1 = Instr2 (Movq, arg1, Reg "rax") in
+      let instr2 = Instr2 (Imulq, arg2, Reg "rax") in
+      let instr3 = Instr2 (Movq, Reg "rax", dest) in
+      [ instr1; instr2; instr3 ]
   | Var var ->
       let instr1 = Instr2 (Movq, Var var, dest) in
       [ instr1 ]
@@ -176,6 +177,20 @@ let select_assign dest (exp : Ir.exp) =
       let instr14 = Instr2 (Movq, Reg "rax", dest) in
       [ instr1; instr2; instr3; instr4; instr5; instr6; instr7 ]
       @ [ instr8; instr9; instr10; instr11; instr12; instr13; instr14 ]
+  | Call (atom1, args) ->
+      let passing_args =
+        List.mapi
+          (fun idx arg ->
+            Instr2 (Movq, select_atom arg, Reg (List.nth RegUse.arg_regs idx)))
+          args
+      in
+      let arg1 = select_atom atom1 in
+      let instr1 = IndirectCallq (arg1, List.length args) in
+      let instr2 = Instr2 (Movq, Reg "rax", dest) in
+      passing_args @ [ instr1; instr2 ]
+  | FunRef (fname, _arity) ->
+      let instr1 = Instr2 (Leaq, Global fname, dest) in
+      [ instr1 ]
 
 let select_stmt (stmt : Ir.stmt) =
   match stmt with
@@ -227,6 +242,16 @@ let rec select_tail (info : Info.t) (tail : Ir.tail) =
       let instr1 = Instr2 (Movq, Imm 255, Reg "rdi") in
       let instr2 = Callq ("exit", 1) in
       [ instr1; instr2 ]
+  | TailCall (atom1, args) ->
+      let passing_args =
+        List.mapi
+          (fun idx arg ->
+            Instr2 (Movq, select_atom arg, Reg (List.nth RegUse.arg_regs idx)))
+          args
+      in
+      let arg1 = select_atom atom1 in
+      let instr1 = TailJmp (arg1, List.length args) in
+      passing_args @ [ instr1 ]
 
 let select_def { Ir.name; params; blocks; retty = _; info } =
   let move_params =

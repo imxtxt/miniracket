@@ -100,6 +100,13 @@ let rec rco_exp { A.exp; ty } =
       let len_stmts, len_atom = rco_atom len in
       let new_exp = { M.exp = AllocateArray (len_atom, ty); ty } in
       make_lets len_stmts new_exp
+  | Apply (callee, args) ->
+      let callee_stmt, callee_atom = rco_atom callee in
+      let args_stmts, args_atoms = List.map rco_atom args |> List.split in
+      let args_stmts = List.flatten args_stmts in
+      let new_exp = { M.exp = Apply (callee_atom, args_atoms); ty } in
+      make_lets (callee_stmt @ args_stmts) new_exp
+  | FunRef (f, arity) -> { M.exp = FunRef (f, arity); ty }
 
 and rco_atom { A.exp; ty } =
   match exp with
@@ -210,6 +217,17 @@ and rco_atom { A.exp; ty } =
       (e1_stmts @ idx_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
   | A.Exit -> assert false
   | A.AllocateArray _ -> assert false
+  | Apply (callee, args) ->
+      let callee_stmt, callee_atom = rco_atom callee in
+      let args_stmts, args_atoms = List.map rco_atom args |> List.split in
+      let args_stmts = List.flatten args_stmts in
+      let new_exp = { M.exp = Apply (callee_atom, args_atoms); ty } in
+      let tmp = gensym () in
+      (callee_stmt @ args_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | FunRef (f, arity) ->
+      let tmp = gensym () in
+      let new_exp = { M.exp = FunRef (f, arity); ty } in
+      ([ (tmp, new_exp) ], M.Var tmp)
 
 let rco_def { A.name; params; retty; body } =
   let body = rco_exp body in

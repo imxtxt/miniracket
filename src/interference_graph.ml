@@ -21,7 +21,8 @@ let interference_graph_block locals_types (graph : Graph.t) (block : block) =
                 liveafter)
             instr_write;
           match instr with
-          | Callq ("collect", 2) ->
+          | Callq ("collect", 2)
+          | IndirectCallq _ ->
               List.iter
                 (fun d ->
                   SetS.iter

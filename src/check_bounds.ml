@@ -106,6 +106,11 @@ let rec check_bounds_exp { Ast.exp; ty } =
       acc
   | Exit -> assert false
   | AllocateArray _ -> assert false
+  | Apply (callee, args) ->
+      let callee = check_bounds_exp callee in
+      let args = List.map check_bounds_exp args in
+      { exp = Apply (callee, args); ty }
+  | FunRef (f, arity) -> { exp = FunRef (f, arity); ty }
 
 let check_bounds_def (def : Ast.def) =
   let body = check_bounds_exp def.body in

@@ -32,6 +32,8 @@ let rec collect_set { Ast.exp; ty = _ } =
   | ArraySet (exp1, idx, exp2) -> collect_sets [ exp1; idx; exp2 ]
   | Exit -> SetS.empty
   | AllocateArray (exp1, _) -> collect_set exp1
+  | Apply (exp1, args) -> collect_sets (exp1 :: args)
+  | FunRef _ -> SetS.empty
 
 and collect_sets exps =
   List.fold_left
@@ -71,6 +73,8 @@ let uncover_get_exp set_vars exp =
       | ArraySet (e1, idx, e2) -> ArraySet (helper e1, helper idx, helper e2)
       | Exit -> Exit
       | AllocateArray (e1, ty) -> AllocateArray (helper e1, ty)
+      | Apply (e1, es) -> Apply (helper e1, List.map helper es)
+      | FunRef (f, n) -> FunRef (f, n)
     in
     { Ast.exp; ty }
   in

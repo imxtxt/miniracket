@@ -149,6 +149,11 @@ let rec expose_exp { Ast.exp; ty } =
       { Ast.exp = ArraySet (expose_exp e1, expose_exp idx, expose_exp e2); ty }
   | Exit -> { Ast.exp = Exit; ty }
   | AllocateArray _ -> assert false
+  | Apply (callee, args) ->
+      let callee = expose_exp callee in
+      let args = List.map expose_exp args in
+      { exp = Apply (callee, args); ty }
+  | FunRef (f, arity) -> { exp = FunRef (f, arity); ty }
 
 let expose_def (def : Ast.def) =
   let body = expose_exp def.body in

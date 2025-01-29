@@ -27,6 +27,8 @@ let rec ( = ) t1 t2 =
   | Void, Void -> true
   | Vector tys1, Vector tys2 -> List.for_all2 ( = ) tys1 tys2
   | Array t1, Array t2 -> t1 = t2
+  | Function (ps1, rt1), Function (ps2, rt2) ->
+      List.for_all2 ( = ) ps1 ps2 && rt1 = rt2
   | _ -> false
 
 let is_pointer (ty : ty) =
@@ -36,4 +38,4 @@ let is_pointer (ty : ty) =
   | Void -> false
   | Vector _ -> true
   | Array _ -> true
-  | Function _ -> assert false
+  | Function _ -> false

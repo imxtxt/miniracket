@@ -43,6 +43,8 @@ and exp =
   | ArraySet of atom * atom * atom
   | Exit
   | AllocateArray of atom * Type.ty
+  | Apply of atom * atom list
+  | FunRef of string * int
 
 type def = {
   name : string;
@@ -125,11 +127,20 @@ module PP = struct
     | AllocateArray (e1, ty) ->
         Format.fprintf formatter "@[<2>(allocate-array@ %a@ %a)@]" pp_atom e1
           Type.pp ty
+    | Apply (a1, args) ->
+        Format.fprintf formatter "@[(%a@ %a)@]" pp_atom a1 pp_atoms args
+    | FunRef (f, arity) ->
+        Format.fprintf formatter "@[(fun-ref@ %s@ %d)@]" f arity
 
   and pp_texps formatter exps =
     Format.pp_print_list
       ~pp_sep:(fun formatter () -> Format.fprintf formatter "@ ")
       pp_texp formatter exps
+
+  and pp_atoms formatter atoms =
+    Format.pp_print_list
+      ~pp_sep:(fun formatter () -> Format.fprintf formatter "@ ")
+      pp_atom formatter atoms
 
   let pp_param formatter (name, ty) =
     Format.fprintf formatter "[%s@ :@ %a]" name Type.pp ty

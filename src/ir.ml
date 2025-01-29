@@ -33,6 +33,8 @@ type exp =
   | ArrayRef of atom * atom
   | ArraySet of atom * atom * atom
   | AllocateArray of atom * Type.ty
+  | Call of atom * atom list
+  | FunRef of string * int
 
 type stmt =
   | Assign of string * exp
@@ -47,6 +49,7 @@ type tail =
   | Goto of label
   | IfStmt of cc * atom * atom * label * label
   | Exit
+  | TailCall of atom * atom list
 
 type def = {
   name : label;
@@ -64,6 +67,11 @@ module PP = struct
     | Bool true -> Format.fprintf formatter "#t"
     | Bool false -> Format.fprintf formatter "#f"
     | Void -> Format.fprintf formatter "(void)"
+
+  let pp_atoms formatter atoms =
+    Format.pp_print_list
+      ~pp_sep:(fun formatter () -> Format.fprintf formatter " ")
+      pp_atom formatter atoms
 
   let pp_cc formatter cc =
     match cc with
@@ -110,6 +118,9 @@ module PP = struct
           idx pp_atom atom2
     | AllocateArray (len, ty) ->
         Format.fprintf formatter "(allocate-array %a %a)" pp_atom len Type.pp ty
+    | Call (a1, args) ->
+        Format.fprintf formatter "(%a %a)" pp_atom a1 pp_atoms args
+    | FunRef (f, arity) -> Format.fprintf formatter "(fun-ref %s %d)" f arity
 
   let pp_stmt formatter (stmt : stmt) =
     match stmt with
@@ -133,6 +144,8 @@ module PP = struct
         Format.fprintf formatter "if (%a %a %a) goto %s; else goto %s;" pp_cc cc
           pp_atom a1 pp_atom a2 thn els
     | Exit -> Format.fprintf formatter "exit"
+    | TailCall (a1, args) ->
+        Format.fprintf formatter "(tail-call %a %a)" pp_atom a1 pp_atoms args
 
   let pp_block formatter (label, tail) =
     Format.fprintf formatter "@[<v 2>%s:@,%a@]" label pp_tail tail
@@ -187,6 +200,7 @@ module DefinedVar = struct
     | Goto _ -> SetS.empty
     | IfStmt _ -> SetS.empty
     | Exit -> SetS.empty
+    | TailCall _ -> SetS.empty
 
   let defined_vars_def { params; blocks; _ } =
     let defined_vars =
@@ -209,6 +223,7 @@ module CFG = struct
     | Goto label -> SetS.singleton label
     | IfStmt (_, _, _, thn_lbl, els_lbl) -> SetS.of_list [ thn_lbl; els_lbl ]
     | Exit -> SetS.empty
+    | TailCall _ -> SetS.empty
 
   let make_cfg { blocks; info; _ } =
     List.fold_left

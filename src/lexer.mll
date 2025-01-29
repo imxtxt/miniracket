@@ -42,6 +42,14 @@ rule token = parse
   | "array-ref"                 { ARRAYREF                }
   | "array-set!"                { ARRAYSET                }
   | "*"                         { MUL                     }
+  | "define"                    { DEFINE                  }
+  | ":"                         { COLON                   }
+  | "->"                        { ARROW                   }
+  | "Integer"                   { TINTEGER                }
+  | "Boolean"                   { TBOOLEAN                }
+  | "Void"                      { TVOID                   }
+  | "Vector"                    { TVECTOR                 }
+  | "Array"                     { TARRAY                  }
   | lower ident_suffix* as lxm  { VARIABLE lxm            }
   | digit+ as lxm               { INT (int_of_string lxm) }
   | eof                         { EOF                     }

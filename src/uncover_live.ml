@@ -18,27 +18,33 @@ let arg_loc (arg : arg) =
 let instr_read (instr : instr) =
   match instr with
   | Instr2
-      ( (Addq | Subq | Xorq | Cmpq | Sarq | Andq | Orq | Imulq | Salq | Shrq),
+      ( ( Addq | Subq | Xorq | Cmpq | Sarq | Andq | Orq | Imulq | Salq | Shrq
+        | Leaq ),
         arg1,
         arg2 ) ->
       SetS.union (arg_loc arg1) (arg_loc arg2)
   | Instr2 ((Movq | Movzbq), arg1, _) -> arg_loc arg1
   | Instr1 ((Pushq | Popq), _) -> raise LivenessError
-  | Callq (_, arity) ->
-      let open Base in
-      SetS.of_list (List.take RegUse.arg_regs arity)
+  | Callq (_, arity) -> SetS.of_list (Base.List.take RegUse.arg_regs arity)
   | Retq -> raise LivenessError
   | Jmp _ -> SetS.empty
   | JmpIf _ -> SetS.empty
   | Set _ -> SetS.empty
   | Load (_offset, base, _dest) -> SetS.singleton base
   | Store (src, _offset, base) -> SetS.of_list [ src; base ]
+  | IndirectCallq (f, arity)
+  | TailJmp (f, arity) ->
+      SetS.of_list (Base.List.take RegUse.arg_regs arity)
+      |> SetS.union (arg_loc f)
+  | IndirectJmp arg ->
+      let _ = assert false in
+      arg_loc arg
 
 let instr_write (instr : instr) =
   match instr with
   | Instr2
       ( ( Addq | Subq | Movq | Xorq | Movzbq | Sarq | Andq | Orq | Imulq | Salq
-        | Shrq ),
+        | Shrq | Leaq ),
         _,
         arg2 ) ->
       arg_loc arg2
@@ -51,6 +57,11 @@ let instr_write (instr : instr) =
   | Set (_, arg) -> arg_loc arg
   | Load (_offset, _base, dest) -> SetS.singleton dest
   | Store (_src, _offset, _base) -> SetS.empty
+  | IndirectCallq (_f, _args) -> SetS.of_list RegUse.caller_saved_regs
+  | TailJmp (_f, _args) -> SetS.of_list RegUse.caller_saved_regs
+  | IndirectJmp _ ->
+      let _ = assert false in
+      SetS.empty
 
 let liveness_instrs (liveafter : SetS.t) (instrs : X86.instr list) =
   List.fold_right
