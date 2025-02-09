@@ -26,19 +26,19 @@ let select_assign dest (exp : Ir.exp) =
       let instr1 = Callq ("read_int", 0) in
       let instr2 = Instr2 (Movq, Reg "rax", dest) in
       [ instr1; instr2 ]
-  | Add (atom1, atom2) ->
+  | Binop (Add, atom1, atom2) ->
       let arg1 = select_atom atom1 in
       let arg2 = select_atom atom2 in
       let instr1 = Instr2 (Movq, arg1, dest) in
       let instr2 = Instr2 (Addq, arg2, dest) in
       [ instr1; instr2 ]
-  | Sub (atom1, atom2) ->
+  | Binop (Sub, atom1, atom2) ->
       let arg1 = select_atom atom1 in
       let arg2 = select_atom atom2 in
       let instr1 = Instr2 (Movq, arg1, dest) in
       let instr2 = Instr2 (Subq, arg2, dest) in
       [ instr1; instr2 ]
-  | Mul (atom1, atom2) ->
+  | Binop (Mul, atom1, atom2) ->
       let arg1 = select_atom atom1 in
       let arg2 = select_atom atom2 in
       let instr1 = Instr2 (Movq, arg1, Reg "rax") in
@@ -191,6 +191,40 @@ let select_assign dest (exp : Ir.exp) =
   | FunRef (fname, _arity) ->
       let instr1 = Instr2 (Leaq, Global fname, dest) in
       [ instr1 ]
+  | ProcedureArity atom1 ->
+      let arg1 = select_atom atom1 in
+      let instr1 = Instr2 (Movq, arg1, Reg "rax") in
+      let instr2 = Load (0, "rax", "rax") in
+      let instr3 = Instr2 (Shrq, Imm 57, Reg "rax") in
+      let instr4 = Instr2 (Andq, Imm 0b11111, Reg "rax") in
+      let instr5 = Instr2 (Movq, Reg "rax", dest) in
+      [ instr1; instr2; instr3; instr4; instr5 ]
+  | AllocateClosure (len, ty, arity) ->
+      let compute_vector_tag = function
+        | Type.Vector tys ->
+            let tag =
+              List.fold_left
+                (fun acc ty ->
+                  let acc = Int.shift_left acc 1 in
+                  if Type.is_pointer ty then Int.logor acc 1 else acc)
+                0 tys
+            in
+            let tag = Int.shift_left tag 6 in
+            let tag = Int.logor tag (List.length tys) in
+            let tag = Int.shift_left tag 1 in
+            let tag = Int.logor tag 1 in
+            let tag = Int.logor (Int.shift_left arity 57) tag in
+            tag
+        | _ -> assert false
+      in
+      let tag = compute_vector_tag ty in
+      let bytes = (len + 1) * 8 in
+      let instr1 = Instr2 (Movq, Global "free_ptr", Reg "rax") in
+      let instr2 = Instr2 (Addq, Imm bytes, Global "free_ptr") in
+      let instr3 = Instr2 (Movq, Imm tag, Reg "r10") in
+      let instr4 = Store ("r10", 0, "rax") in
+      let instr5 = Instr2 (Movq, Reg "rax", dest) in
+      [ instr1; instr2; instr3; instr4; instr5 ]
 
 let select_stmt (stmt : Ir.stmt) =
   match stmt with

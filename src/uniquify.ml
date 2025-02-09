@@ -6,9 +6,7 @@ let rec uni_exp env { Ast.exp; ty } =
     match exp with
     | Int num -> Int num
     | Read -> Read
-    | Add (e1, e2) -> Add (uni_exp env e1, uni_exp env e2)
-    | Sub (e1, e2) -> Sub (uni_exp env e1, uni_exp env e2)
-    | Mul (e1, e2) -> Mul (uni_exp env e1, uni_exp env e2)
+    | Binop (bop, e1, e2) -> Binop (bop, uni_exp env e1, uni_exp env e2)
     | Var var -> Var (MapS.find var env)
     | GetBang _ -> assert false
     | Let (var, init, body) ->
@@ -44,6 +42,21 @@ let rec uni_exp env { Ast.exp; ty } =
         let args = List.map (uni_exp env) args in
         Apply (callee, args)
     | FunRef _ -> assert false
+    | Lambda (params, retty, body) ->
+        let env, params =
+          List.fold_right
+            (fun (name, ty) (env, params) ->
+              let new_name = gensym () in
+              let new_env = MapS.add name new_name env in
+              let new_params = (new_name, ty) :: params in
+              (new_env, new_params))
+            params (env, [])
+        in
+        let body = uni_exp env body in
+        Lambda (params, retty, body)
+    | ProcedureArity e1 -> ProcedureArity (uni_exp env e1)
+    | Closure _ -> assert false
+    | AllocateClosure _ -> assert false
   in
   { exp = new_exp; ty }
 

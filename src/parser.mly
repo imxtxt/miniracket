@@ -65,6 +65,10 @@
 %token TVECTOR "Vector"
 %token TARRAY "Array"
 
+// LLambda
+%token LAMBDA "lambda"
+%token PROCEDUREARITY "procedure-arity"
+
 %token EOF
 
 %type <Ast.texp> texp
@@ -80,8 +84,8 @@ texp:
 // LVar
 | num = INT                                                            { {Ast.exp = Int num; ty = Integer}               }
 | "(" "read" ")"                                                       { {Ast.exp = Read; ty = Integer}                  }
-| "(" "+" e1 = texp e2 = texp ")"                                      { {Ast.exp = Add (e1, e2); ty = Integer}          }
-| "(" "-" e1 = texp e2 = texp ")"                                      { {Ast.exp = Sub (e1, e2); ty = Integer}          }
+| "(" "+" e1 = texp e2 = texp ")"                                      { {Ast.exp = Binop (Add, e1, e2); ty = Integer}   }
+| "(" "-" e1 = texp e2 = texp ")"                                      { {Ast.exp = Binop (Sub, e1, e2); ty = Integer}   }
 | var = VARIABLE                                                       { {Ast.exp = Var var; ty = Integer}               }
 | "(" "let" "(" "[" var = VARIABLE init = texp "]" ")" body = texp ")" { {Ast.exp = Let (var, init, body); ty = Integer} }
 
@@ -111,7 +115,7 @@ texp:
 | "(" "vector-set!" e1 = texp i = INT e2 = texp")" { {Ast.exp = VectorSet (e1, i, e2); ty = Integer} }
 
 // LArray
-| "(" "*" e1 = texp e2 = texp ")"                   { {Ast.exp = Mul (e1, e2); ty = Integer}         }
+| "(" "*" e1 = texp e2 = texp ")"                   { {Ast.exp = Binop (Mul, e1, e2); ty = Integer}  }
 | "(" "array" len = texp init = texp ")"            { {Ast.exp = Array (len, init); ty = Integer}    }
 | "(" "array-length" e1 = texp ")"                  { {Ast.exp = ArrayLength e1; ty = Integer}       }
 | "(" "array-ref" e1 = texp i = texp ")"            { {Ast.exp = ArrayRef (e1, i); ty = Integer}     }
@@ -119,6 +123,10 @@ texp:
 
 // Lfun
 | "(" e1 = texp args = list(texp) ")" { {Ast.exp = Apply (e1, args); ty = Integer} }
+
+// LLambda
+| "(" "lambda" ":" "(" ps = list(param) ")" ":" t = ty b = texp ")" { {Ast.exp = Lambda (ps, t, b); ty = Integer} }
+| "(" "procedure-arity" e1 = texp ")"                               { {Ast.exp = ProcedureArity e1; ty = Integer} }
 
 
 // Lfun

@@ -31,13 +31,18 @@ let to_ir_cc (cc : A.cc) : I.cc =
   | Gt -> Gt
   | Ge -> Ge
 
+let to_ir_bop (bop : A.bop) : I.bop =
+  match bop with
+  | Add -> Add
+  | Sub -> Sub
+  | Mul -> Mul
+
 let rec explicate_tail { A.exp; _ } =
   match exp with
   | A.Int num -> I.Return (I.Int num)
   | A.Read -> I.Return I.Read
-  | A.Add (a1, a2) -> I.Return (I.Add (to_ir_atom a1, to_ir_atom a2))
-  | A.Sub (a1, a2) -> I.Return (I.Sub (to_ir_atom a1, to_ir_atom a2))
-  | A.Mul (a1, a2) -> I.Return (I.Mul (to_ir_atom a1, to_ir_atom a2))
+  | A.Binop (bop, a1, a2) ->
+      I.Return (I.Binop (to_ir_bop bop, to_ir_atom a1, to_ir_atom a2))
   | A.Var var -> I.Return (I.Var var)
   | A.Let (var, init, body) ->
       Hashtbl.add locals_types var init.ty;
@@ -75,17 +80,17 @@ let rec explicate_tail { A.exp; _ } =
   | A.AllocateArray _ -> raise IrError
   | A.Apply (a1, args) -> I.TailCall (to_ir_atom a1, List.map to_ir_atom args)
   | A.FunRef (f, arity) -> I.Return (I.FunRef (f, arity))
+  | A.ProcedureArity a1 -> I.Return (I.ProcedureArity (to_ir_atom a1))
+  | A.AllocateClosure _ -> raise IrError
 
 and explicate_assign { A.exp; _ } var cont =
   match exp with
   | A.Int num -> I.Seq (I.Assign (var, I.Int num), cont)
   | A.Read -> I.Seq (I.Assign (var, I.Read), cont)
-  | A.Add (a1, a2) ->
-      I.Seq (I.Assign (var, I.Add (to_ir_atom a1, to_ir_atom a2)), cont)
-  | A.Sub (a1, a2) ->
-      I.Seq (I.Assign (var, I.Sub (to_ir_atom a1, to_ir_atom a2)), cont)
-  | A.Mul (a1, a2) ->
-      I.Seq (I.Assign (var, I.Mul (to_ir_atom a1, to_ir_atom a2)), cont)
+  | A.Binop (bop, a1, a2) ->
+      I.Seq
+        ( I.Assign (var, I.Binop (to_ir_bop bop, to_ir_atom a1, to_ir_atom a2)),
+          cont )
   | A.Var v -> I.Seq (I.Assign (var, I.Var v), cont)
   | A.Let (v, init, body) ->
       Hashtbl.add locals_types v init.ty;
@@ -137,14 +142,16 @@ and explicate_assign { A.exp; _ } var cont =
       I.Seq
         (I.Assign (var, I.Call (to_ir_atom a1, List.map to_ir_atom args)), cont)
   | A.FunRef (f, arity) -> I.Seq (I.Assign (var, I.FunRef (f, arity)), cont)
+  | A.ProcedureArity a1 ->
+      I.Seq (I.Assign (var, I.ProcedureArity (to_ir_atom a1)), cont)
+  | A.AllocateClosure (len, ty, arity) ->
+      I.Seq (I.Assign (var, I.AllocateClosure (len, ty, arity)), cont)
 
 and explicate_pred { A.exp; ty } thn_cont els_cont =
   match exp with
   | A.Int _
   | A.Read
-  | A.Add _
-  | A.Sub _
-  | A.Mul _ ->
+  | A.Binop _ ->
       raise IrError
   | A.Var var ->
       let thn_label = create_block thn_cont in
@@ -204,15 +211,15 @@ and explicate_pred { A.exp; ty } thn_cont els_cont =
       Hashtbl.add locals_types tmp ty;
       let cont = explicate_pred { A.exp = A.Var tmp; ty } thn_cont els_cont in
       explicate_assign { A.exp = A.Apply (a1, args); ty } tmp cont
-  | FunRef _ -> assert false
+  | A.FunRef _ -> raise IrError
+  | A.ProcedureArity _ -> raise IrError
+  | A.AllocateClosure _ -> raise IrError
 
 and explicate_effect { A.exp; ty } cont =
   match exp with
   | A.Int _ -> cont
   | A.Read -> I.Seq (I.ReadStmt, cont)
-  | A.Add _ -> cont
-  | A.Sub _ -> cont
-  | A.Mul _ -> cont
+  | A.Binop _ -> cont
   | A.Var _ -> cont
   | A.Let (var, init, body) ->
       Hashtbl.add locals_types var init.ty;
@@ -253,6 +260,8 @@ and explicate_effect { A.exp; ty } cont =
       Hashtbl.add locals_types tmp ty;
       explicate_assign { A.exp = A.Apply (a1, args); ty } tmp cont
   | A.FunRef _ -> cont
+  | A.ProcedureArity _ -> cont
+  | A.AllocateClosure _ -> raise IrError
 
 and explicate_while cnd body els_cont =
   let start_label = genlabel () in

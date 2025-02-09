@@ -10,23 +10,12 @@ let rec check_exp env { A.exp; _ } =
   match exp with
   | Int num -> { A.exp = A.Int num; ty = T.Integer }
   | Read -> { A.exp = A.Read; ty = T.Integer }
-  | Add (e1, e2) -> (
+  | Binop (bop, e1, e2) -> (
       let e1 = check_exp env e1 in
       let e2 = check_exp env e2 in
       match (e1.ty, e2.ty) with
-      | T.Integer, T.Integer -> { A.exp = A.Add (e1, e2); ty = T.Integer }
-      | _ -> raise TypeError)
-  | Sub (e1, e2) -> (
-      let e1 = check_exp env e1 in
-      let e2 = check_exp env e2 in
-      match (e1.ty, e2.ty) with
-      | T.Integer, T.Integer -> { A.exp = A.Sub (e1, e2); ty = T.Integer }
-      | _ -> raise TypeError)
-  | Mul (e1, e2) -> (
-      let e1 = check_exp env e1 in
-      let e2 = check_exp env e2 in
-      match (e1.ty, e2.ty) with
-      | T.Integer, T.Integer -> { A.exp = A.Mul (e1, e2); ty = T.Integer }
+      | T.Integer, T.Integer ->
+          { A.exp = A.Binop (bop, e1, e2); ty = T.Integer }
       | _ -> raise TypeError)
   | Var var -> { A.exp = A.Var var; ty = MapS.find var env }
   | GetBang _ -> assert false
@@ -136,6 +125,21 @@ let rec check_exp env { A.exp; _ } =
             { A.exp = Apply (callee, args); ty = retty }
       | _ -> raise TypeError)
   | FunRef _ -> assert false
+  | Lambda (params, retty, body) ->
+      let lam_env =
+        List.fold_left (fun acc (name, ty) -> MapS.add name ty acc) env params
+      in
+      let body = check_exp lam_env body in
+      check_euqal retty body.ty;
+      let lam_ty = T.Function (List.map snd params, retty) in
+      { A.exp = Lambda (params, retty, body); ty = lam_ty }
+  | ProcedureArity e1 -> (
+      let e1 = check_exp env e1 in
+      match e1.ty with
+      | T.Function _ -> { A.exp = ProcedureArity e1; ty = T.Integer }
+      | _ -> raise TypeError)
+  | Closure _ -> assert false
+  | AllocateClosure _ -> assert false
 
 let check_def env { A.name; params; retty; body } =
   let env =

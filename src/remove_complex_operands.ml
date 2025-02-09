@@ -15,24 +15,22 @@ let to_mon_cc (cc : A.cc) : M.cc =
   | Gt -> Gt
   | Ge -> Ge
 
+let to_mon_bop (bop : A.bop) : M.bop =
+  match bop with
+  | Add -> Add
+  | Sub -> Sub
+  | Mul -> Mul
+
 let rec rco_exp { A.exp; ty } =
   match exp with
   | A.Int num -> { M.exp = M.Int num; ty }
   | A.Read -> { M.exp = M.Read; ty }
-  | A.Add (e1, e2) ->
+  | Binop (bop, e1, e2) ->
       let e1_stmts, e1_atom = rco_atom e1 in
       let e2_stmts, e2_atom = rco_atom e2 in
-      let new_exp = { M.exp = M.Add (e1_atom, e2_atom); ty } in
-      make_lets (e1_stmts @ e2_stmts) new_exp
-  | A.Sub (e1, e2) ->
-      let e1_stmts, e1_atom = rco_atom e1 in
-      let e2_stmts, e2_atom = rco_atom e2 in
-      let new_exp = { M.exp = M.Sub (e1_atom, e2_atom); ty } in
-      make_lets (e1_stmts @ e2_stmts) new_exp
-  | A.Mul (e1, e2) ->
-      let e1_stmts, e1_atom = rco_atom e1 in
-      let e2_stmts, e2_atom = rco_atom e2 in
-      let new_exp = { M.exp = M.Mul (e1_atom, e2_atom); ty } in
+      let new_exp =
+        { M.exp = M.Binop (to_mon_bop bop, e1_atom, e2_atom); ty }
+      in
       make_lets (e1_stmts @ e2_stmts) new_exp
   | A.Var var -> { M.exp = M.Var var; ty }
   | A.GetBang var -> { M.exp = M.Var var; ty }
@@ -100,13 +98,21 @@ let rec rco_exp { A.exp; ty } =
       let len_stmts, len_atom = rco_atom len in
       let new_exp = { M.exp = AllocateArray (len_atom, ty); ty } in
       make_lets len_stmts new_exp
-  | Apply (callee, args) ->
+  | A.Apply (callee, args) ->
       let callee_stmt, callee_atom = rco_atom callee in
       let args_stmts, args_atoms = List.map rco_atom args |> List.split in
       let args_stmts = List.flatten args_stmts in
       let new_exp = { M.exp = Apply (callee_atom, args_atoms); ty } in
       make_lets (callee_stmt @ args_stmts) new_exp
-  | FunRef (f, arity) -> { M.exp = FunRef (f, arity); ty }
+  | A.FunRef (f, arity) -> { M.exp = FunRef (f, arity); ty }
+  | A.Lambda _ -> assert false
+  | A.ProcedureArity e1 ->
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let new_exp = { M.exp = ProcedureArity e1_atom; ty } in
+      make_lets e1_stmts new_exp
+  | A.Closure _ -> assert false
+  | A.AllocateClosure (len, ty, arity) ->
+      { M.exp = AllocateClosure (len, ty, arity); ty }
 
 and rco_atom { A.exp; ty } =
   match exp with
@@ -115,23 +121,11 @@ and rco_atom { A.exp; ty } =
       let tmp = gensym () in
       let exp = { M.exp = M.Read; ty } in
       ([ (tmp, exp) ], M.Var tmp)
-  | A.Add (e1, e2) ->
+  | Binop (bop, e1, e2) ->
       let e1_stmts, e1_atom = rco_atom e1 in
       let e2_stmts, e2_atom = rco_atom e2 in
       let tmp = gensym () in
-      let new_exp = { M.exp = M.Add (e1_atom, e2_atom); ty } in
-      (e1_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
-  | A.Sub (e1, e2) ->
-      let e1_stmts, e1_atom = rco_atom e1 in
-      let e2_stmts, e2_atom = rco_atom e2 in
-      let tmp = gensym () in
-      let new_exp = { M.exp = M.Sub (e1_atom, e2_atom); ty } in
-      (e1_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
-  | A.Mul (e1, e2) ->
-      let e1_stmts, e1_atom = rco_atom e1 in
-      let e2_stmts, e2_atom = rco_atom e2 in
-      let tmp = gensym () in
-      let new_exp = { M.exp = M.Mul (e1_atom, e2_atom); ty } in
+      let new_exp = { M.exp = Binop (to_mon_bop bop, e1_atom, e2_atom); ty } in
       (e1_stmts @ e2_stmts @ [ (tmp, new_exp) ], M.Var tmp)
   | A.Var var -> ([], M.Var var)
   | A.GetBang var ->
@@ -227,6 +221,17 @@ and rco_atom { A.exp; ty } =
   | FunRef (f, arity) ->
       let tmp = gensym () in
       let new_exp = { M.exp = FunRef (f, arity); ty } in
+      ([ (tmp, new_exp) ], M.Var tmp)
+  | Lambda _ -> assert false
+  | ProcedureArity e1 ->
+      let tmp = gensym () in
+      let e1_stmts, e1_atom = rco_atom e1 in
+      let new_exp = { M.exp = ProcedureArity e1_atom; ty } in
+      (e1_stmts @ [ (tmp, new_exp) ], M.Var tmp)
+  | Closure _ -> assert false
+  | AllocateClosure (len, ty, arity) ->
+      let tmp = gensym () in
+      let new_exp = { M.exp = AllocateClosure (len, ty, arity); ty } in
       ([ (tmp, new_exp) ], M.Var tmp)
 
 let rco_def { A.name; params; retty; body } =

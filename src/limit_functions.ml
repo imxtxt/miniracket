@@ -18,15 +18,14 @@ let rec limit_type (ty : Type.ty) : Type.ty =
         let new_tys = first_tys @ [ Vector rest_tys ] in
         Function (new_tys, ty)
       else Function (tys, ty)
+  | Dummy -> Dummy
 
 let rec limit_exp env { Ast.exp; ty } =
   let exp =
     match exp with
     | Int i -> Int i
     | Read -> Read
-    | Add (e1, e2) -> Add (limit_exp env e1, limit_exp env e2)
-    | Sub (e1, e2) -> Sub (limit_exp env e1, limit_exp env e2)
-    | Mul (e1, e2) -> Mul (limit_exp env e1, limit_exp env e2)
+    | Binop (bop, e1, e2) -> Binop (bop, limit_exp env e1, limit_exp env e2)
     | Var var -> (
         match MapS.find_opt var env with
         | Some (tup, idx) -> VectorRef (tup, idx)
@@ -80,6 +79,12 @@ let rec limit_exp env { Ast.exp; ty } =
           Apply (f, new_args)
         else Apply (f, args)
     | FunRef (f, arity) -> FunRef (f, arity)
+    | Lambda _ -> assert false
+    | ProcedureArity e1 -> ProcedureArity (limit_exp env e1)
+    | Closure (arity, es) ->
+        let es = List.map (limit_exp env) es in
+        Closure (arity, es)
+    | AllocateClosure _ -> assert false
   in
   { Ast.exp; ty = limit_type ty }
 

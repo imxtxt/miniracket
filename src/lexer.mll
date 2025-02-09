@@ -50,6 +50,8 @@ rule token = parse
   | "Void"                      { TVOID                   }
   | "Vector"                    { TVECTOR                 }
   | "Array"                     { TARRAY                  }
+  | "lambda"                    { LAMBDA                  }
+  | "procedure-arity"           { PROCEDUREARITY          }
   | lower ident_suffix* as lxm  { VARIABLE lxm            }
   | digit+ as lxm               { INT (int_of_string lxm) }
   | eof                         { EOF                     }

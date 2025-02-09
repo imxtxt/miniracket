@@ -6,9 +6,7 @@ let rec reveal_exp env { Ast.exp; ty } =
     match exp with
     | Int i -> Int i
     | Read -> Read
-    | Add (e1, e2) -> Add (reveal_exp env e1, reveal_exp env e2)
-    | Sub (e1, e2) -> Sub (reveal_exp env e1, reveal_exp env e2)
-    | Mul (e1, e2) -> Mul (reveal_exp env e1, reveal_exp env e2)
+    | Binop (bop, e1, e2) -> Binop (bop, reveal_exp env e1, reveal_exp env e2)
     | Var var -> (
         match MapS.find_opt var env with
         | Some arity -> FunRef (var, arity)
@@ -48,6 +46,10 @@ let rec reveal_exp env { Ast.exp; ty } =
         let args = List.map (reveal_exp env) args in
         Apply (callee, args)
     | FunRef _ -> assert false
+    | Lambda (params, retty, body) -> Lambda (params, retty, reveal_exp env body)
+    | ProcedureArity e1 -> ProcedureArity (reveal_exp env e1)
+    | Closure _ -> assert false
+    | AllocateClosure _ -> assert false
   in
   { Ast.exp; ty }
 

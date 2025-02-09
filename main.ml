@@ -10,6 +10,8 @@ let _ =
   |> Type_check.run
   |> Uniquify.run
   |> Reveal_functions.run
+  |> Convert_assignments.run
+  |> Convert_to_closures.run
   |> Limit_functions.run
   |> Check_bounds.run
   |> Expose_allocation.run

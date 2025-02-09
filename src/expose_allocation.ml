@@ -14,9 +14,8 @@ let rec expose_exp { Ast.exp; ty } =
   match exp with
   | Int num -> { Ast.exp = Int num; ty }
   | Read -> { Ast.exp = Read; ty }
-  | Add (e1, e2) -> { Ast.exp = Add (expose_exp e1, expose_exp e2); ty }
-  | Sub (e1, e2) -> { Ast.exp = Sub (expose_exp e1, expose_exp e2); ty }
-  | Mul (e1, e2) -> { Ast.exp = Mul (expose_exp e1, expose_exp e2); ty }
+  | Binop (bop, e1, e2) ->
+      { Ast.exp = Binop (bop, expose_exp e1, expose_exp e2); ty }
   | Var var -> { Ast.exp = Var var; ty }
   | GetBang _ -> assert false
   | Let (var, init, body) ->
@@ -33,51 +32,7 @@ let rec expose_exp { Ast.exp; ty } =
       { Ast.exp = WhileLoop (expose_exp cnd, expose_exp body); ty }
   | Void -> { Ast.exp = Void; ty }
   | Vector es ->
-      (* 
-        (let ([tmp1 1])
-          (let ([tmp2 2]))
-            (begin 
-               (if (< (+ free_ptr bytes) fromspace_end))
-                   (void)
-                   (collect bytes))
-               (let ([v (allocate len ty)])
-                 (begin
-                   (vector-set! v 0 tmp1)
-                   (vector-set! v 1 tmp2)
-                   v)))
-      *)
-      let len = List.length es in
-      let bytes = (len + 1) * 8 in
-      let bindings = List.map (fun exp -> (gensym (), expose_exp exp)) es in
-      let v = gensym () in
-      let acc = { exp = Var v; ty } in
-      let vector_inits =
-        List.mapi
-          (fun idx (var, exp) ->
-            let rhs =
-              match is_pure exp with
-              | true -> exp
-              | false -> { exp = Var var; ty = exp.ty }
-            in
-            { exp = VectorSet ({ exp = Var v; ty }, idx, rhs); ty = Void })
-          bindings
-      in
-      let acc = { exp = Begin (vector_inits, acc); ty } in
-      let acc = { exp = Let (v, { exp = Allocate (len, ty); ty }, acc); ty } in
-      let free_ptr_ast = { exp = GlobalValue "free_ptr"; ty = Integer } in
-      let bytes_ast = { exp = Int bytes; ty = Integer } in
-      let add_ast = { exp = Add (free_ptr_ast, bytes_ast); ty = Integer } in
-      let end_ast = { exp = GlobalValue "fromspace_end"; ty = Integer } in
-      let cmp_ast = { exp = Cmp (Lt, add_ast, end_ast); ty = Boolean } in
-      let void_ast = { exp = Void; ty = Void } in
-      let collect_ast = { exp = Collect bytes_ast; ty = Void } in
-      let if_ast = { exp = If (cmp_ast, void_ast, collect_ast); ty = Void } in
-      let acc = { exp = Begin ([ if_ast ], acc); ty = acc.ty } in
-      List.fold_right
-        (fun (var, exp) acc ->
-          if is_pure exp then acc
-          else { exp = Let (var, exp, acc); ty = acc.ty })
-        bindings acc
+      allocate_tuple { exp = Allocate (List.length es, ty); ty } es ty
   | VectorLength e1 -> { Ast.exp = VectorLength (expose_exp e1); ty }
   | VectorRef (e1, idx) -> { Ast.exp = VectorRef (expose_exp e1, idx); ty }
   | VectorSet (e1, idx, e2) ->
@@ -117,7 +72,7 @@ let rec expose_exp { Ast.exp; ty } =
       let idx_ast = { exp = Var idx; ty = Integer } in
       let aset = { exp = ArraySet (arr_ast, idx_ast, init_ast); ty = Void } in
       let one_ast = { exp = Int 1; ty = Integer } in
-      let incr_idx = { exp = Add (idx_ast, one_ast); ty = Integer } in
+      let incr_idx = { exp = Binop (Add, idx_ast, one_ast); ty = Integer } in
       let idx_set = { exp = SetBang (idx, incr_idx); ty = Void } in
       let while_cmp = { exp = Cmp (Lt, idx_ast, len_ast); ty = Boolean } in
       let while_body = { exp = Begin ([ aset ], idx_set); ty = Void } in
@@ -128,7 +83,9 @@ let rec expose_exp { Ast.exp; ty } =
       let allocate_array = { exp = AllocateArray (len_ast, ty); ty } in
       let acc = { exp = Let (arr, allocate_array, acc); ty = acc.ty } in
       let free_ptr_ast = { exp = GlobalValue "free_ptr"; ty = Integer } in
-      let add_ast = { exp = Add (free_ptr_ast, bytes_ast); ty = Integer } in
+      let add_ast =
+        { exp = Binop (Add, free_ptr_ast, bytes_ast); ty = Integer }
+      in
       let end_ast = { exp = GlobalValue "fromspace_end"; ty = Integer } in
       let cmp_ast = { exp = Cmp (Lt, add_ast, end_ast); ty = Boolean } in
       let void_ast = { exp = Void; ty = Void } in
@@ -136,8 +93,10 @@ let rec expose_exp { Ast.exp; ty } =
       let if_ast = { exp = If (cmp_ast, void_ast, collect_ast); ty = Void } in
       let acc = { exp = Begin ([ if_ast ], acc); ty = acc.ty } in
       let eight_ast = { exp = Int 8; ty = Integer } in
-      let len_bytes = { exp = Mul (len_ast, eight_ast); ty = Integer } in
-      let bytes_rhs = { exp = Add (eight_ast, len_bytes); ty = Integer } in
+      let len_bytes = { exp = Binop (Mul, len_ast, eight_ast); ty = Integer } in
+      let bytes_rhs =
+        { exp = Binop (Add, eight_ast, len_bytes); ty = Integer }
+      in
       let acc = { exp = Let (bytes, bytes_rhs, acc); ty = acc.ty } in
       let acc = { exp = Let (init, init_exp, acc); ty = acc.ty } in
       let acc = { exp = Let (len, len_exp, acc); ty = acc.ty } in
@@ -154,6 +113,59 @@ let rec expose_exp { Ast.exp; ty } =
       let args = List.map expose_exp args in
       { exp = Apply (callee, args); ty }
   | FunRef (f, arity) -> { exp = FunRef (f, arity); ty }
+  | Lambda _ -> assert false
+  | ProcedureArity e -> { exp = ProcedureArity (expose_exp e); ty }
+  | Closure (arity, es) ->
+      let len = List.length es in
+      let allocate = { exp = AllocateClosure (len, ty, arity); ty } in
+      allocate_tuple allocate es ty
+  | AllocateClosure _ -> assert false
+
+and allocate_tuple allocate es ty =
+  (* 
+        (let ([tmp1 1])
+          (let ([tmp2 2]))
+            (begin 
+               (if (< (+ free_ptr bytes) fromspace_end))
+                   (void)
+                   (collect bytes))
+               (let ([v (allocate len ty)])
+                 (begin
+                   (vector-set! v 0 tmp1)
+                   (vector-set! v 1 tmp2)
+                   v)))
+      *)
+  let len = List.length es in
+  let bytes = (len + 1) * 8 in
+  let bindings = List.map (fun exp -> (gensym (), expose_exp exp)) es in
+  let v = gensym () in
+  let acc = { exp = Var v; ty } in
+  let vector_inits =
+    List.mapi
+      (fun idx (var, exp) ->
+        let rhs =
+          match is_pure exp with
+          | true -> exp
+          | false -> { exp = Var var; ty = exp.ty }
+        in
+        { exp = VectorSet ({ exp = Var v; ty }, idx, rhs); ty = Void })
+      bindings
+  in
+  let acc = { exp = Begin (vector_inits, acc); ty } in
+  let acc = { exp = Let (v, allocate, acc); ty } in
+  let free_ptr_ast = { exp = GlobalValue "free_ptr"; ty = Integer } in
+  let bytes_ast = { exp = Int bytes; ty = Integer } in
+  let add_ast = { exp = Binop (Add, free_ptr_ast, bytes_ast); ty = Integer } in
+  let end_ast = { exp = GlobalValue "fromspace_end"; ty = Integer } in
+  let cmp_ast = { exp = Cmp (Lt, add_ast, end_ast); ty = Boolean } in
+  let void_ast = { exp = Void; ty = Void } in
+  let collect_ast = { exp = Collect bytes_ast; ty = Void } in
+  let if_ast = { exp = If (cmp_ast, void_ast, collect_ast); ty = Void } in
+  let acc = { exp = Begin ([ if_ast ], acc); ty = acc.ty } in
+  List.fold_right
+    (fun (var, exp) acc ->
+      if is_pure exp then acc else { exp = Let (var, exp, acc); ty = acc.ty })
+    bindings acc
 
 let expose_def (def : Ast.def) =
   let body = expose_exp def.body in

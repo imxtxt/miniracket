@@ -5,6 +5,7 @@ type ty =
   | Vector of ty list
   | Array of ty
   | Function of ty list * ty
+  | Dummy
 
 let rec pp formatter ty =
   match ty with
@@ -14,6 +15,7 @@ let rec pp formatter ty =
   | Vector ts -> Format.fprintf formatter "(Vector %a)" pp_ts ts
   | Array ty -> Format.fprintf formatter "(Array %a)" pp ty
   | Function (ts, t) -> Format.fprintf formatter "(%a -> %a)" pp_ts ts pp t
+  | Dummy -> Format.fprintf formatter "_"
 
 and pp_ts formatter ts =
   Format.pp_print_list
@@ -39,3 +41,4 @@ let is_pointer (ty : ty) =
   | Vector _ -> true
   | Array _ -> true
   | Function _ -> false
+  | Dummy -> false

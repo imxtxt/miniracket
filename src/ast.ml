@@ -10,12 +10,15 @@ and cc =
   | Gt
   | Ge
 
+and bop =
+  | Add
+  | Sub
+  | Mul
+
 and exp =
   | Int of int
   | Read
-  | Add of texp * texp
-  | Sub of texp * texp
-  | Mul of texp * texp
+  | Binop of bop * texp * texp
   | Var of string
   | GetBang of string
   | Let of string * texp * texp
@@ -42,6 +45,10 @@ and exp =
   | AllocateArray of texp * Type.ty
   | Apply of texp * texp list
   | FunRef of string * int
+  | Lambda of (string * Type.ty) list * Type.ty * texp
+  | ProcedureArity of texp
+  | Closure of int * texp list
+  | AllocateClosure of int * Type.ty * int
 
 type def = {
   name : string;
@@ -59,16 +66,19 @@ module PP = struct
     | Gt -> Format.fprintf formatter ">"
     | Ge -> Format.fprintf formatter ">="
 
+  let pp_bop formatter bop =
+    match bop with
+    | Add -> Format.fprintf formatter "+"
+    | Sub -> Format.fprintf formatter "-"
+    | Mul -> Format.fprintf formatter "*"
+
   let rec pp_texp formatter { exp; ty = _ } =
     match exp with
     | Int num -> Format.fprintf formatter "%d" num
     | Read -> Format.fprintf formatter "(read)"
-    | Add (e1, e2) ->
-        Format.fprintf formatter "@[<2>(+@ %a@ %a)@]" pp_texp e1 pp_texp e2
-    | Sub (e1, e2) ->
-        Format.fprintf formatter "@[<2>(-@ %a@ %a)@]" pp_texp e1 pp_texp e2
-    | Mul (e1, e2) ->
-        Format.fprintf formatter "@[<2>(*@ %a@ %a)@]" pp_texp e1 pp_texp e2
+    | Binop (bop, e1, e2) ->
+        Format.fprintf formatter "@[<2>(%a@ %a@ %a)@]" pp_bop bop pp_texp e1
+          pp_texp e2
     | Var var -> Format.fprintf formatter "%s" var
     | GetBang var -> Format.fprintf formatter "@[(get!@ %s)@]" var
     | Let (var, init, body) ->
@@ -124,27 +134,38 @@ module PP = struct
         Format.fprintf formatter "@[(%a@ %a)@]" pp_texp e1 pp_texps es
     | FunRef (f, arity) ->
         Format.fprintf formatter "@[(fun-ref@ %s@ %d)@]" f arity
+    | Lambda (params, retty, body) ->
+        Format.fprintf formatter "@[<2>(lambda:@ (%a)@ :@ %a@ %a)@]"
+          (pp_params false) params Type.pp retty pp_texp body
+    | ProcedureArity e1 ->
+        Format.fprintf formatter "@[(procedure-arity@ %a)@]" pp_texp e1
+    | Closure (arity, es) ->
+        Format.fprintf formatter "@[(closure@ %d@ (list@ %a))@]" arity pp_texps
+          es
+    | AllocateClosure (len, ty, arity) ->
+        Format.fprintf formatter "@[<2>(allocate-closure@ %d@ %a@ %d)@]" len
+          Type.pp ty arity
 
   and pp_texps formatter exps =
     Format.pp_print_list
       ~pp_sep:(fun formatter () -> Format.fprintf formatter "@ ")
       pp_texp formatter exps
 
-  let pp_param formatter (name, ty) =
-    Format.fprintf formatter "[%s@ :@ %a]" name Type.pp ty
+  and pp_param formatter (name, ty) =
+    Format.fprintf formatter "[%s : %a]" name Type.pp ty
 
-  let pp_params formatter params =
+  and pp_params is_def formatter params =
     match params with
     | [] -> Format.fprintf formatter ""
     | _ ->
-        Format.fprintf formatter "@ ";
+        if is_def && List.length params <> 0 then Format.fprintf formatter " ";
         Format.pp_print_list
-          ~pp_sep:(fun formatter () -> Format.fprintf formatter "@ ")
+          ~pp_sep:(fun formatter () -> Format.fprintf formatter " ")
           pp_param formatter params
 
   let pp_def formatter { name; params; retty; body } =
-    Format.fprintf formatter "@[<2>(define@ (%s%a)@ :@ %a@ %a)@]" name pp_params
-      params Type.pp retty pp_texp body
+    Format.fprintf formatter "@[<2>(define (%s%a) : %a@ %a)@]" name
+      (pp_params true) params Type.pp retty pp_texp body
 
   let pp formatter defs =
     Format.pp_print_list

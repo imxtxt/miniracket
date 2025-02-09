@@ -5,9 +5,7 @@ let rec collect_set { Ast.exp; ty = _ } =
   match exp with
   | Int _ -> SetS.empty
   | Read -> SetS.empty
-  | Add (exp1, exp2) -> collect_sets [ exp1; exp2 ]
-  | Sub (exp1, exp2) -> collect_sets [ exp1; exp2 ]
-  | Mul (exp1, exp2) -> collect_sets [ exp1; exp2 ]
+  | Binop (_bop, exp1, exp2) -> collect_sets [ exp1; exp2 ]
   | Var _ -> SetS.empty
   | GetBang _ -> assert false
   | Let (_, init, body) -> collect_sets [ init; body ]
@@ -19,14 +17,14 @@ let rec collect_set { Ast.exp; ty = _ } =
   | Begin (exps, exp) -> collect_sets (exp :: exps)
   | WhileLoop (cnd, body) -> collect_sets [ cnd; body ]
   | Void -> SetS.empty
-  | Vector _ -> assert false
+  | Vector exps -> collect_sets exps
   | VectorLength exp1 -> collect_set exp1
   | VectorRef (exp1, _) -> collect_set exp1
   | VectorSet (exp1, _, exp2) -> collect_sets [ exp1; exp2 ]
   | Collect _ -> SetS.empty
   | Allocate _ -> SetS.empty
   | GlobalValue _ -> SetS.empty
-  | Array _ -> assert false
+  | Array (len, init) -> collect_sets [ len; init ]
   | ArrayLength exp1 -> collect_set exp1
   | ArrayRef (exp1, idx) -> collect_sets [ exp1; idx ]
   | ArraySet (exp1, idx, exp2) -> collect_sets [ exp1; idx; exp2 ]
@@ -34,6 +32,10 @@ let rec collect_set { Ast.exp; ty = _ } =
   | AllocateArray (exp1, _) -> collect_set exp1
   | Apply (exp1, args) -> collect_sets (exp1 :: args)
   | FunRef _ -> SetS.empty
+  | Lambda (_params, _retty, body) -> collect_set body
+  | ProcedureArity e1 -> collect_set e1
+  | Closure (_arity, es) -> collect_sets es
+  | AllocateClosure (_len, _ty, _arity) -> SetS.empty
 
 and collect_sets exps =
   List.fold_left
@@ -46,9 +48,7 @@ let uncover_get_exp set_vars exp =
       match exp with
       | Int i -> Int i
       | Read -> Read
-      | Add (e1, e2) -> Add (helper e1, helper e2)
-      | Sub (e1, e2) -> Sub (helper e1, helper e2)
-      | Mul (e1, e2) -> Mul (helper e1, helper e2)
+      | Binop (bop, e1, e2) -> Binop (bop, helper e1, helper e2)
       | Var var -> if SetS.mem var set_vars then GetBang var else Var var
       | GetBang _ -> assert false
       | Let (var, init, body) -> Let (var, helper init, helper body)
@@ -60,7 +60,7 @@ let uncover_get_exp set_vars exp =
       | Begin (exps, exp) -> Begin (List.map helper exps, helper exp)
       | WhileLoop (cnd, body) -> WhileLoop (helper cnd, helper body)
       | Void -> Void
-      | Vector _ -> assert false
+      | Vector exps -> Vector (List.map helper exps)
       | VectorLength e1 -> VectorLength (helper e1)
       | VectorRef (e1, idx) -> VectorRef (helper e1, idx)
       | VectorSet (e1, idx, e2) -> VectorSet (helper e1, idx, helper e2)
@@ -75,6 +75,10 @@ let uncover_get_exp set_vars exp =
       | AllocateArray (e1, ty) -> AllocateArray (helper e1, ty)
       | Apply (e1, es) -> Apply (helper e1, List.map helper es)
       | FunRef (f, n) -> FunRef (f, n)
+      | Lambda _ -> assert false
+      | ProcedureArity e1 -> ProcedureArity (helper e1)
+      | Closure _ -> assert false
+      | AllocateClosure (len, ty, arity) -> AllocateClosure (len, ty, arity)
     in
     { Ast.exp; ty }
   in

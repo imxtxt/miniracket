@@ -13,12 +13,15 @@ type cc =
   | Gt
   | Ge
 
+type bop =
+  | Add
+  | Sub
+  | Mul
+
 type exp =
   | Int of int
   | Read
-  | Add of atom * atom
-  | Sub of atom * atom
-  | Mul of atom * atom
+  | Binop of bop * atom * atom
   | Var of string
   | Bool of bool
   | Cmp of cc * atom * atom
@@ -35,6 +38,8 @@ type exp =
   | AllocateArray of atom * Type.ty
   | Call of atom * atom list
   | FunRef of string * int
+  | ProcedureArity of atom
+  | AllocateClosure of int * Type.ty * int
 
 type stmt =
   | Assign of string * exp
@@ -81,16 +86,19 @@ module PP = struct
     | Gt -> Format.fprintf formatter ">"
     | Ge -> Format.fprintf formatter ">="
 
+  let pp_bop formatter bop =
+    match bop with
+    | Add -> Format.fprintf formatter "+"
+    | Sub -> Format.fprintf formatter "-"
+    | Mul -> Format.fprintf formatter "*"
+
   let pp_exp formatter (exp : exp) =
     match exp with
     | Int num -> Format.fprintf formatter "%d" num
     | Read -> Format.fprintf formatter "(read)"
-    | Add (atom1, atom2) ->
-        Format.fprintf formatter "(+ %a %a)" pp_atom atom1 pp_atom atom2
-    | Sub (atom1, atom2) ->
-        Format.fprintf formatter "(- %a %a)" pp_atom atom1 pp_atom atom2
-    | Mul (atom1, atom2) ->
-        Format.fprintf formatter "(* %a %a)" pp_atom atom1 pp_atom atom2
+    | Binop (bop, atom1, atom2) ->
+        Format.fprintf formatter "(%a %a %a)" pp_bop bop pp_atom atom1 pp_atom
+          atom2
     | Var var -> Format.fprintf formatter "%s" var
     | Bool true -> Format.fprintf formatter "#t"
     | Bool false -> Format.fprintf formatter "#f"
@@ -121,6 +129,11 @@ module PP = struct
     | Call (a1, args) ->
         Format.fprintf formatter "(%a %a)" pp_atom a1 pp_atoms args
     | FunRef (f, arity) -> Format.fprintf formatter "(fun-ref %s %d)" f arity
+    | ProcedureArity a1 ->
+        Format.fprintf formatter "(procedure-arity %a)" pp_atom a1
+    | AllocateClosure (len, ty, arity) ->
+        Format.fprintf formatter "(allocate-closure %d %a %d)" len Type.pp ty
+          arity
 
   let pp_stmt formatter (stmt : stmt) =
     match stmt with

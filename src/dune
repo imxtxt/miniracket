@@ -12,6 +12,8 @@
   ast_mon
   ast
   check_bounds
+  convert_assignments
+  convert_to_closures
   explicate_control
   expose_allocation
   graph

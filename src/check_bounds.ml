@@ -6,9 +6,8 @@ let rec check_bounds_exp { Ast.exp; ty } =
   match exp with
   | Int i -> { Ast.exp = Int i; ty }
   | Read -> { Ast.exp = Read; ty }
-  | Add (e1, e2) -> { exp = Add (check_bounds_exp e1, check_bounds_exp e2); ty }
-  | Sub (e1, e2) -> { exp = Sub (check_bounds_exp e1, check_bounds_exp e2); ty }
-  | Mul (e1, e2) -> { exp = Mul (check_bounds_exp e1, check_bounds_exp e2); ty }
+  | Binop (bop, e1, e2) ->
+      { exp = Binop (bop, check_bounds_exp e1, check_bounds_exp e2); ty }
   | Var var -> { exp = Var var; ty }
   | GetBang _ -> assert false
   | Let (var, init, body) ->
@@ -111,6 +110,12 @@ let rec check_bounds_exp { Ast.exp; ty } =
       let args = List.map check_bounds_exp args in
       { exp = Apply (callee, args); ty }
   | FunRef (f, arity) -> { exp = FunRef (f, arity); ty }
+  | Lambda _ -> assert false
+  | ProcedureArity e1 -> { exp = ProcedureArity (check_bounds_exp e1); ty }
+  | Closure (arity, es) ->
+      let es = List.map check_bounds_exp es in
+      { exp = Closure (arity, es); ty }
+  | AllocateClosure _ -> assert false
 
 let check_bounds_def (def : Ast.def) =
   let body = check_bounds_exp def.body in
