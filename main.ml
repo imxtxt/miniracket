@@ -6,23 +6,27 @@ let parse filename =
   ast
 
 let _ =
-  parse Sys.argv.(1)
-  |> Type_check.run
-  |> Uniquify.run
-  |> Reveal_functions.run
-  |> Convert_assignments.run
-  |> Convert_to_closures.run
-  |> Limit_functions.run
-  |> Check_bounds.run
-  |> Expose_allocation.run
-  |> Uncover_get.run
-  |> Remove_complex_operands.run
-  |> Explicate_control.run
-  |> Inject_info.run
-  |> Select_instructions.run
-  |> Uncover_live.run
-  |> Interference_graph.run
-  |> Allocate_registers.run
-  |> Patch_instructions.run
-  |> Prelude_conclusion.run
-  |> X86.PP.std_pp
+  let out_handle = open_out "output.s" in
+  let _ = 
+    parse Sys.argv.(1)
+    |> Type_check.run
+    |> Uniquify.run
+    |> Reveal_functions.run
+    |> Convert_assignments.run
+    |> Convert_to_closures.run
+    |> Limit_functions.run
+    |> Check_bounds.run
+    |> Expose_allocation.run
+    |> Uncover_get.run
+    |> Remove_complex_operands.run
+    |> Explicate_control.run
+    |> Inject_info.run
+    |> Select_instructions.run
+    |> Uncover_live.run
+    |> Interference_graph.run
+    |> Allocate_registers.run
+    |> Patch_instructions.run
+    |> Prelude_conclusion.run
+    |> X86.PP.pp (Format.formatter_of_out_channel out_handle)
+  in
+  close_out out_handle
