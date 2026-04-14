@@ -22,5 +22,5 @@ let genlabel =
     incr i;
     Printf.sprintf "Block_%d" !i
 
-let mangle_label label = "_" ^ label
+let mangle_label label = label
 let align_stack bytes = if bytes mod 16 = 0 then bytes else bytes + 8
