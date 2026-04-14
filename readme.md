@@ -3,7 +3,6 @@
 ``` shell
  dune build
 ```
-请注意：Miniracket编译器目前仅支持Linux+X86平台。
 
 ## 如何使用Miniracket编译器
 使用下列命令编译程序：
